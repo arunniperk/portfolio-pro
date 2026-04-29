@@ -142,6 +142,81 @@ ipcMain.handle('net-fetch', async (_event, url, options = {}) => {
   }
 });
 
+ipcMain.handle('scrape-investing', async (_event, symbol) => {
+  try {
+    const ticker = symbol.split('.')[0];
+    const searchUrl = `https://in.investing.com/search/?q=${encodeURIComponent(ticker)}`;
+    const searchRes = await fetch(searchUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
+    });
+    if (!searchRes.ok) return null;
+    const searchHtml = await searchRes.text();
+    
+    // Find the first equity link in search results
+    const linkMatch = searchHtml.match(/href="(\/equities\/[^"]+)"/);
+    if (!linkMatch) return null;
+    
+    const equityUrl = `https://in.investing.com${linkMatch[1]}`;
+    const equityRes = await fetch(equityUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
+    });
+    if (!equityRes.ok) return null;
+    const html = await equityRes.text();
+    
+    const out = {};
+    // Market Cap
+    const mcMatch = html.match(/Market Cap<\/dt>\s*<dd[^>]*>\s*(?:<a[^>]*>)?\s*<span>([^<]+)<\/span>\s*<span>([^<]+)<\/span>/i);
+    if(mcMatch) {
+      let val = parseFloat(mcMatch[1]);
+      const unit = mcMatch[2].toUpperCase();
+      if(unit === 'T') val *= 1e12;
+      else if(unit === 'B') val *= 1e9;
+      else if(unit === 'M') val *= 1e6;
+      else if(unit === 'CR') val *= 1e7;
+      out.marketCap = val;
+    }
+    // P/E Ratio
+    const peMatch = html.match(/P\/E Ratio<\/dt>\s*<dd[^>]*>\s*(?:<a[^>]*>)?\s*<span>([^<]+)<\/span>/i);
+    if(peMatch) out.pe = parseFloat(peMatch[1]);
+    // EPS
+    const epsMatch = html.match(/EPS<\/dt>\s*<dd[^>]*>\s*(?:<a[^>]*>)?\s*<span>([^<]+)<\/span>/i);
+    if(epsMatch) out.eps = parseFloat(epsMatch[1]);
+    // Div Yield
+    const divMatch = html.match(/Dividend[^<]*<\/dt>\s*<dd[^>]*>\s*(?:<a[^>]*>)?\s*<span>([^<]+)<\/span>/i);
+    if(divMatch) {
+      const p = divMatch[1].match(/\(([^%]+)%\)/);
+      if(p) out.divYield = parseFloat(p[1]) / 100;
+    }
+    return out;
+  } catch (e) {
+    console.error('scrape-investing error:', e);
+    return null;
+  }
+});
+
+ipcMain.handle('scrape-mc-nps', async (_event, url) => {
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    // Moneycontrol NPS pages usually have the NAV in the <title> like [70.4217]
+    const match = html.match(/<title>[^\]]*\[([0-9]+\.[0-9]+)\][^<]*<\/title>/i);
+    if (match) return parseFloat(match[1]);
+    
+    // Fallback: search for nav value in span with class "span_764" or similar if title fails
+    // But title is usually very reliable on MC for NPS
+    const spanMatch = html.match(/class="span_764"[^>]*>([0-9]+\.[0-9]+)<\/span>/i);
+    if (spanMatch) return parseFloat(spanMatch[1]);
+
+    return null;
+  } catch (e) {
+    console.error('scrape-mc-nps error:', e);
+    return null;
+  }
+});
+
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 app.whenReady().then(() => {
   createWindow();

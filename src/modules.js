@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { NvBtn, NvInput, Badge, SortTh } from './components/ui';
 import { Ic } from './icons';
-import { fmt, fmtQty, fmtPct, sortRows, gColor, isUS, short } from './utils';
+import { fmt, fmtQty, fmtPct, sortRows, gColor, isUS, short, xirr } from './utils';
 import { useYahooSearch, useNotes } from './hooks';
 import { getItemSync, setItemSync } from './storage';
 
@@ -45,7 +45,7 @@ export function NotesModule({T,holdings,onClose}) {
                 </div>
                 <div style={{display:'flex',gap:6}}>
                   {!isEdit&&<button onClick={()=>{setEditSym(sym);setEditText(note);}} style={{background:'none',border:`1px solid ${T.border}`,borderRadius:6,cursor:'pointer',color:T.text3,padding:'4px 8px',display:'flex',alignItems:'center',gap:4,fontSize:11,transition:'all .1s'}} onMouseEnter={e=>{e.currentTarget.style.borderColor=T.accent;e.currentTarget.style.color=T.accent;}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.text3;}}><Ic.Pencil/> Edit</button>}
-                  {note&&!isEdit&&<button onClick={()=>saveNote(sym,'')} style={{background:'none',border:`1px solid ${T.border}`,borderRadius:6,cursor:'pointer',color:T.text3,padding:'4px 8px',display:'flex',alignItems:'center',fontSize:11,transition:'all .1s'}} onMouseEnter={e=>{e.currentTarget.style.borderColor=T.danger;e.currentTarget.style.color=T.danger;}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.text3;}}><Ic.Trash/></button>}
+                  {note&&!isEdit&&<button onClick={()=>{if(window.confirm(`Clear note for ${short(sym)}?`)) saveNote(sym,'');}} style={{background:'none',border:`1px solid ${T.border}`,borderRadius:6,cursor:'pointer',color:T.text3,padding:'4px 8px',display:'flex',alignItems:'center',fontSize:11,transition:'all .1s'}} onMouseEnter={e=>{e.currentTarget.style.borderColor=T.danger;e.currentTarget.style.color=T.danger;}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.text3;}}><Ic.Trash/></button>}
                 </div>
               </div>
               {isEdit?(
@@ -170,8 +170,16 @@ export function AlertsModule({T,prices,holdings,alerts,setAlerts,onClose}) {
     },...p]);
     setForm({symbol:'',name:'',t1:'',t2:'',currency:'INR'});setShowAdd(false);
   };
-  const removeAlert=id=>setAlerts(p=>p.filter(a=>a.id!==id));
-  const removeAllForStock=sym=>setAlerts(p=>p.filter(a=>a.symbol!==sym));
+  const removeAlert=id=>{
+    if(window.confirm("Remove this price alert?")){
+      setAlerts(p=>p.filter(a=>a.id!==id));
+    }
+  };
+  const removeAllForStock=sym=>{
+    if(window.confirm(`Remove ALL alerts for ${short(sym)}?`)){
+      setAlerts(p=>p.filter(a=>a.symbol!==sym));
+    }
+  };
   const resetAlert=id=>setAlerts(p=>p.map(a=>a.id===id?{...a,t1Hit:false,t1HitAt:null,t2Hit:false,t2HitAt:null}:a));
   const saveEdit=(id)=>{
     setAlerts(p=>p.map(a=>a.id===id?{...a,t1:parseFloat(editForm.t1),t2:editForm.t2?parseFloat(editForm.t2):null,t1Hit:false,t2Hit:false,t1HitAt:null,t2HitAt:null}:a));
@@ -274,8 +282,8 @@ export function AlertsModule({T,prices,holdings,alerts,setAlerts,onClose}) {
       )}
 
       {/* Active Alerts List */}
-      <div style={{background:T.surface2,borderRadius:8,border:`1px solid ${T.border}`,overflow:'hidden'}}>
-        <div style={{padding:'12px 16px',borderBottom:`1px solid ${T.border}`,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+      <div style={{background:T.surface2,borderRadius:8,border:'1px solid ' + T.border,overflow:'hidden'}}>
+        <div style={{padding:'12px 16px',borderBottom:'1px solid ' + T.border,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
             <div style={{width:3,height:16,background:T.cyan,borderRadius:2}}/>
             <span style={{fontSize:13,fontWeight:700,color:T.text}}>Active Alerts</span>
@@ -338,6 +346,7 @@ export function AlertsModule({T,prices,holdings,alerts,setAlerts,onClose}) {
         </table>
       </div>
 
+      {/* Triggered Alerts List */}
       {triggered.length>0&&(
         <div style={{background:T.surface2,borderRadius:8,border:`1px solid ${T.success}40`,overflow:'hidden'}}>
           <div style={{padding:'12px 16px',borderBottom:`1px solid ${T.border}`,display:'flex',alignItems:'center',gap:8}}>
@@ -629,7 +638,7 @@ export function BenchmarkModule({T,rows,inRows,usRows,usdInr,history,onClose}) {
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:12}}>
         <div>
           <div style={{fontSize:20,fontWeight:700,color:T.text,marginBottom:4}}>Benchmark Comparison</div>
-          <div style={{fontSize:13,color:T.text3}}>Index performance vs your portfolio period</div>
+          <div style={{fontSize:13,color:T.text3}}>Portfolio Manager Pro (v4.7.4)</div>
         </div>
         <div style={{display:'flex',gap:10,alignItems:'center'}}>
           <div style={{display:'flex',gap:8,alignItems:'center'}}>
@@ -1148,36 +1157,9 @@ export function NewsModule({T,holdings,onClose}) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // Auto-snapshots on every price refresh. Storage: pm_portfolio_history
 
-export function HistoryModule({T,rows,usdInr,history,setHistory,onClose}) {
+export function HistoryModule({T,history,setHistory,onClose}) {
   const svgRef=useRef();
   const [hover,setHover]=useState(null);
-
-  // Called externally on each price refresh to save snapshot (throttled to reduce disk IO)
-  useEffect(()=>{
-    if(!rows.length)return;
-    const inValRaw = rows.filter(r=>r.currency==='INR').reduce((s,r)=>s+(r.curValue??r.invested),0);
-    const usValRaw = rows.filter(r=>r.currency==='USD').reduce((s,r)=>s+(r.curValue??r.invested),0);
-    const inrVal = Math.round(inValRaw + (usValRaw * (usdInr || 83.5)));
-    
-    const inInvRaw = rows.filter(r=>r.currency==='INR').reduce((s,r)=>s+r.invested,0);
-    const usInvRaw = rows.filter(r=>r.currency==='USD').reduce((s,r)=>s+r.invested,0);
-    const inrInv = Math.round(inInvRaw + (usInvRaw * (usdInr || 83.5)));
-    
-    const usdVal = Math.round(usValRaw);
-    const usdInv = Math.round(usInvRaw);
-    const today=new Date().toISOString().slice(0,10);
-    
-    setHistory(prev=>{
-      const existing=prev.find(p=>p.date===today);
-      if(existing){
-        // Only update if value changed by more than 0.1% to save performance/disk
-        const diff=Math.abs(existing.inrVal-inrVal)/Math.max(existing.inrVal,1);
-        if(diff < 0.001) return prev; 
-        return prev.map(p=>p.date===today?{...p,inrVal,inrInv,usdVal,usdInv}:p);
-      }
-      return [...prev,{date:today,inrVal,inrInv,usdVal,usdInv}].slice(-365);
-    });
-  },[rows]);
 
   const data=useMemo(()=>history.filter(h=>h.inrVal>0).sort((a,b)=>a.date.localeCompare(b.date)),[history]);
 
@@ -1214,7 +1196,9 @@ export function HistoryModule({T,rows,usdInr,history,setHistory,onClose}) {
         </div>
         <div style={{display:'flex',gap:16,alignItems:'center'}}>
           <div style={{display:'flex',gap:16}}>
-            <div style={{textAlign:'right'}}><div style={{fontSize:11,color:T.text3}}>Current Value</div><div style={{fontSize:18,fontWeight:700,color:T.text}}>₹{vals[vals.length-1].toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
+            <div style={{textAlign:'right'}}><div style={{fontSize:11,color:T.text3}}>Stocks Value</div><div style={{fontSize:16,fontWeight:700,color:T.text}}>₹{(data[data.length-1].portfolioVal||0).toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
+            <div style={{textAlign:'right'}}><div style={{fontSize:11,color:T.text3}}>NPS Value</div><div style={{fontSize:16,fontWeight:700,color:T.accent}}>₹{(data[data.length-1].npsVal||0).toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
+            <div style={{textAlign:'right'}}><div style={{fontSize:11,color:T.text3}}>Total Value</div><div style={{fontSize:18,fontWeight:700,color:T.text}}>₹{vals[vals.length-1].toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
             <div style={{textAlign:'right'}}><div style={{fontSize:11,color:T.text3}}>Since Start</div><div style={{fontSize:18,fontWeight:700,color:lc}}>{gain>=0?'+':'−'}₹{Math.abs(gain).toLocaleString('en-IN',{maximumFractionDigits:0})} ({gainPct>=0?'+':''}{gainPct.toFixed(2)}%)</div></div>
           </div>
           {onClose&&<button onClick={onClose} style={{background:'none',border:`1px solid ${T.border}`,borderRadius:6,cursor:'pointer',color:T.text3,padding:'7px 8px',display:'flex',transition:'all .1s'}} onMouseEnter={e=>{e.currentTarget.style.borderColor=T.accent;e.currentTarget.style.color=T.accent;}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.text3;}}><Ic.X/></button>}
@@ -1311,7 +1295,11 @@ export function WatchlistModule({T,usdInr,onClose}) {
     setForm({symbol:'',name:'',targetEntry:'',targetExit:'',notes:''});setSrch('');setResults([]);setShowAdd(false);
   };
 
-  const removeItem=id=>setItems(p=>p.filter(i=>i.id!==id));
+  const removeItem=id=>{
+    if(window.confirm("Remove this stock from your watchlist?")){
+      setItems(p=>p.filter(i=>i.id!==id));
+    }
+  };
   const saveEdit=item=>setItems(p=>p.map(i=>i.id===item.id?item:i));
 
   const csvExport=()=>{
@@ -1611,7 +1599,7 @@ export function LotsModule({T,prices,onClose}) {
                       <td style={{...tdS}}>{pnlP!=null?<span style={{fontWeight:700,color:pnlP>=0?T.success:T.danger}}>{pnlP>=0?'+':''}{pnlP.toFixed(2)}%</span>:'—'}</td>
                       <td style={{...tdS,color:days>=365?T.success:T.warning}}><span style={{fontWeight:600}}>{days}d</span><span style={{fontSize:10,marginLeft:4,color:T.text3}}>{days>=365?'LTCG':'STCG'}</span></td>
                       <td style={{...tdS,color:T.text3}}>{lot.notes||'—'}</td>
-                      <td style={{...tdS,textAlign:'center'}}><button onClick={()=>removeLot(lot.id)} style={{background:'none',border:'none',cursor:'pointer',color:T.text3,padding:'3px 6px',borderRadius:4,transition:'all .1s'}} onMouseEnter={e=>{e.currentTarget.style.color=T.danger;}} onMouseLeave={e=>{e.currentTarget.style.color=T.text3;}}><Ic.Trash/></button></td>
+                      <td style={{...tdS,textAlign:'center'}}><button onClick={()=>{if(window.confirm("Delete this buy lot? This will affect your average price calculations.")) removeLot(lot.id);}} style={{background:'none',border:'none',cursor:'pointer',color:T.text3,padding:'3px 6px',borderRadius:4,transition:'all .1s'}} onMouseEnter={e=>{e.currentTarget.style.color=T.danger;}} onMouseLeave={e=>{e.currentTarget.style.color=T.text3;}}><Ic.Trash/></button></td>
                     </tr>
                   );
                 })}
@@ -1806,6 +1794,397 @@ export function TaxModule({T,prices,onClose}) {
 
       {!lots.length&&!soldLots.length&&<div style={{background:T.surface2,borderRadius:8,border:`1px solid ${T.border}`,padding:40,textAlign:'center',color:T.text3}}>No lots recorded. Add buy transactions in the Lots Tracker to compute tax liability.</div>}
       <div style={{fontSize:11,color:T.text3,fontStyle:'italic',padding:'0 4px'}}>⚠ Estimates only. Tax rates: Equity STCG 15%, LTCG 10% (above ₹1L exemption). Consult a CA for ITR filing.</div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── MODULE: NPS (NATIONAL PENSION SYSTEM) ─────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export function NPSModule({T,holdings,setHoldings,navs,setNavs,growth,setGrowth,onClose}) {
+  const [showAdd,setShowAdd]=useState(false);
+  const [form,setForm]=useState({pfm:'SBI Pension Funds Pvt. Ltd.',e_u:'',c_u:'',g_u:'',e_p:38,c_p:24,g_p:38,tInv:'',tOut:'',nCont:'',sDate:new Date().toISOString().split('T')[0]});
+  const [editingNav,setEditingNav]=useState(null); // {pfm, sch, val}
+  const [loading,setLoading]=useState(false);
+
+  useEffect(() => {
+    setItemSync('pm_nps_navs', JSON.stringify(navs));
+  }, [navs]);
+
+  const PFMS=[
+    'SBI Pension Funds Pvt. Ltd.',
+    'LIC Pension Fund Ltd.',
+    'UTI Retirement Solutions Ltd.',
+    'HDFC Pension Management Co. Ltd.',
+    'ICICI Prudential Pension Funds Mgmt Co. Ltd.',
+    'Kotak Mahindra Pension Fund Ltd.',
+    'Aditya Birla Sun Life Pension Mgmt Ltd.',
+    'Tata Pension Management Ltd.',
+    'Max Life Pension Fund Mgmt Ltd.',
+    'Axis Pension Fund Management Ltd.'
+  ];
+
+  const fetchNavs=async()=>{
+    setLoading(true);
+    try{
+      const utiMap = {
+        'E': 'https://www.moneycontrol.com/nps/nav/uti-retirement-solutions-pension-fund-scheme-e-tier-i/SM002003',
+        'C': 'https://www.moneycontrol.com/nps/nav/uti-retirement-solutions-pension-fund-scheme-c-tier-i/SM002004',
+        'G': 'https://www.moneycontrol.com/nps/nav/uti-retirement-solutions-pension-fund-scheme-g-tier-i/SM002005'
+      };
+      const newNavs = {...navs};
+      let changed = false;
+      for(const sch of ['E','C','G']){
+        const val = await window.electronAPI.scrapeMoneycontrol(utiMap[sch]);
+        if(val && val > 0) {
+          newNavs['UTI_'+sch] = val;
+          changed = true;
+        }
+      }
+      if(changed) setNavs(newNavs);
+    }catch(e){console.error(e);}
+    setLoading(false);
+  };
+
+  const addPfm=()=>{
+    const id=Date.now().toString();
+    const newHoldings=[...(holdings||[]), {
+      id, 
+      pfm:form.pfm, 
+      e:parseFloat(form.e_u)||0, 
+      c:parseFloat(form.c_u)||0, 
+      g:parseFloat(form.g_u)||0,
+      e_p:parseFloat(form.e_p)||0,
+      c_p:parseFloat(form.c_p)||0,
+      g_p:parseFloat(form.g_p)||0,
+      tInv:parseFloat(form.tInv)||0,
+      tOut:parseFloat(form.tOut)||0,
+      nCont:parseInt(form.nCont)||0,
+      sDate:form.sDate,
+      monthly:''
+    }];
+    setHoldings(newHoldings);
+    setShowAdd(false);
+    setForm({pfm:'SBI Pension Funds Pvt. Ltd.',e_u:'',c_u:'',g_u:'',e_p:38,c_p:24,g_p:38,tInv:'',tOut:'',nCont:'',sDate:new Date().toISOString().split('T')[0]});
+  };
+
+  const invest=(id)=>{
+    const h = (holdings||[]).find(x=>x.id===id);
+    const amt = parseFloat(h.monthly)||0;
+    if(amt<=0) return;
+    
+    const navE = navs[getNavKey(h.pfm,'E')]||0;
+    const navC = navs[getNavKey(h.pfm,'C')]||0;
+    const navG = navs[getNavKey(h.pfm,'G')]||0;
+    
+    if(navE<=0||navC<=0||navG<=0) {
+      alert("Please ensure all NAVs are updated before investing.");
+      return;
+    }
+    
+    const newE = h.e + (amt * (h.e_p/100) / navE);
+    const newC = h.c + (amt * (h.c_p/100) / navC);
+    const newG = h.g + (amt * (h.g_p/100) / navG);
+    
+    setHoldings(holdings.map(x=>x.id===id?{...x, e:newE, c:newC, g:newG, tInv: (x.tInv||0)+amt, nCont:(x.nCont||0)+1, monthly:''}:x));
+  };
+
+  const removePfm=(id)=>{
+    if(window.confirm("Are you sure you want to remove this Pension Fund Manager? All units and history for this PFM will be lost.")){
+      setHoldings(holdings.filter(h=>h.id!==id));
+    }
+  };
+
+  const getNavKey=(pfm,sch)=>pfm.split(' ')[0].toUpperCase() + '_' + sch;
+  
+  const saveNav=()=>{
+    if(!editingNav) return;
+    const key = getNavKey(editingNav.pfm, editingNav.sch);
+    setNavs(p=>({...p, [key]: parseFloat(editingNav.val)||0}));
+    setEditingNav(null);
+  };
+
+  const totalVal = (holdings||[]).reduce((acc,h)=>{
+    return acc + (h.e * (navs[getNavKey(h.pfm,'E')]||0)) + (h.c * (navs[getNavKey(h.pfm,'C')]||0)) + (h.g * (navs[getNavKey(h.pfm,'G')]||0));
+  },0);
+
+  const totalInvested = (holdings||[]).reduce((a,h)=>a+(parseFloat(h.tInv)||0),0);
+  const totalWithdrawals = (holdings||[]).reduce((a,h)=>a+(parseFloat(h.tOut)||0),0);
+  const totalProfit = (totalVal - totalInvested) + totalWithdrawals;
+  const absReturn = totalInvested > 0 ? (totalProfit / totalInvested) * 100 : 0;
+
+  
+  // Aggregate XIRR (Synthetic with Growth)
+  let aggregateXirr = 0;
+  if(totalInvested > 0){
+    const cfs = [];
+    (holdings||[]).forEach(h => {
+       if(!h.tInv || !h.sDate) return;
+       const start = new Date(h.sDate);
+       const end = new Date();
+       const months = Math.max(1, (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()));
+       const count = h.nCont > 0 ? h.nCont : months;
+       const gapMs = (end.getTime() - start.getTime()) / count;
+       
+       const totalInv = parseFloat(h.tInv);
+       let weightSum = 0;
+       for(let i=0; i<count; i++) weightSum += Math.pow(1 + (growth/100), Math.floor(i/12));
+       const firstCont = totalInv / weightSum;
+
+       for(let i=0; i<count; i++) {
+         const date = start.getTime() + (gapMs * i);
+         if(date > end.getTime()) break;
+         const amt = firstCont * Math.pow(1 + (growth/100), Math.floor(i/12));
+         cfs.push({date, amount: -amt});
+       }
+       if(h.tOut > 0) cfs.push({date: end.getTime() - 1000, amount: parseFloat(h.tOut)});
+    });
+    cfs.push({date: new Date().getTime(), amount: totalVal});
+    aggregateXirr = xirr(cfs);
+  }
+
+  const INP={padding:'10px 14px',background:T.surface3,border:`1px solid ${T.border2}`,borderRadius:8,color:T.text,fontSize:13,outline:'none',width:'100%',boxSizing:'border-box',fontFamily:'inherit',transition:'border-color .15s'};
+  const tdS={padding:'14px 18px',borderBottom:`1px solid ${T.border}`,textAlign:'left',whiteSpace:'nowrap'};
+
+  const NavCell = ({h, sch, units}) => {
+    const key = getNavKey(h.pfm, sch);
+    const nav = navs[key] || 0;
+    const val = units * nav;
+    const isEditing = editingNav?.pfm === h.pfm && editingNav?.sch === sch;
+
+    return (
+      <td style={tdS}>
+        <div style={{display:'flex', flexDirection:'column', gap:2}}>
+          <div style={{fontSize:13, fontWeight:600, color:T.text}}>{fmt(val,'INR')}</div>
+          <div style={{display:'flex', alignItems:'center', gap:4}}>
+            <span style={{fontSize:10, color:T.text3}}>{fmtQty(units)} @</span>
+            {isEditing ? (
+              <div style={{display:'flex', gap:4}}>
+                <input type="number" step="0.0001" value={editingNav.val} onChange={e=>setEditingNav(p=>({...p, val:e.target.value}))} style={{...INP, padding:'2px 4px', width:70, fontSize:10}} autoFocus onBlur={saveNav} onKeyDown={e=>e.key==='Enter'&&saveNav()}/>
+              </div>
+            ) : (
+              <span onClick={()=>setEditingNav({pfm:h.pfm, sch, val:nav})} style={{fontSize:10, color:T.accent, cursor:'pointer', borderBottom:`1px dotted ${T.accent}`}}>{nav.toFixed(4)}</span>
+            )}
+          </div>
+        </div>
+      </td>
+    );
+  };
+
+  return(
+    <div style={{flex:1,overflowY:'auto',minHeight:0,background:T.surface}}>
+      <div style={{padding:24,maxWidth:1200,margin:'0 auto',display:'flex',flexDirection:'column',gap:24}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:20}}>
+          <div>
+            <div style={{fontSize:24,fontWeight:800,color:T.text,letterSpacing:'-0.02em',marginBottom:4}}>NPS Portfolio</div>
+            <div style={{fontSize:14,color:T.text3}}>National Pension System Tracking</div>
+          </div>
+          <div style={{display:'flex',gap:12,alignItems:'center'}}>
+            <div style={{display:'flex', alignItems:'center', gap:8, background:T.surface2, border:`1px solid ${T.border}`, borderRadius:8, padding:'4px 12px'}}>
+              <span style={{fontSize:11, fontWeight:700, color:T.text3, textTransform:'uppercase'}}>Step-up %</span>
+              <input type="number" value={growth} onChange={e=>setGrowth(parseFloat(e.target.value)||0)} style={{...INP, padding:'4px 8px', width:50, border:'none', background:'none', fontSize:12}} title="Calibration: Tune this to match your NPS Portal XIRR"/>
+            </div>
+            <NvBtn onClick={fetchNavs} T={T} disabled={loading}><Ic.Refresh s={loading}/> Sync Latest NAVs</NvBtn>
+            <NvBtn onClick={()=>setShowAdd(!showAdd)} variant="primary" T={T}><Ic.Plus/> Add Fund Manager</NvBtn>
+            {onClose&&<button onClick={onClose} style={{background:'none',border:`1px solid ${T.border}`,borderRadius:8,cursor:'pointer',color:T.text3,padding:'8px',display:'flex'}} onMouseEnter={e=>{e.currentTarget.style.borderColor=T.accent;e.currentTarget.style.color=T.accent;}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.text3;}}><Ic.X/></button>}
+          </div>
+        </div>
+
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:16}}>
+          {[
+            {l:'Total Invested', v:fmt(totalInvested,'INR'), c:T.text},
+            {l:'Total Profit (Gain)', v:fmt(totalProfit,'INR'), c:totalProfit>=0?T.success:T.danger},
+            {l:'Absolute Return', v:absReturn.toFixed(2)+'%', c:absReturn>=0?T.success:T.danger},
+            {l:'XIRR (Annualized)', v:aggregateXirr.toFixed(2)+'%', c:aggregateXirr>=0?T.success:T.danger}
+          ].map((m,i)=>(
+            <div key={i} style={{background:T.surface2,border:`1px solid ${T.border}`,borderRadius:12,padding:'16px 20px',display:'flex',flexDirection:'column',gap:4}}>
+              <div style={{fontSize:11,color:T.text3,fontWeight:700,textTransform:'uppercase',letterSpacing:'.05em'}}>{m.l}</div>
+              <div style={{fontSize:22,fontWeight:800,color:m.c}}>{m.v}</div>
+            </div>
+          ))}
+        </div>
+
+        {showAdd&&(
+          <div style={{background:T.surface2,border:`1px solid ${T.border}`,borderRadius:12,padding:24,display:'flex',flexDirection:'column',gap:20,boxShadow:'0 12px 32px rgba(0,0,0,.2)'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+              <div style={{fontSize:15,fontWeight:700,color:T.text}}>Register New Fund Manager</div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:16}}>
+              <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                <label style={{fontSize:11,fontWeight:700,color:T.text3,textTransform:'uppercase'}}>Pension Fund Manager</label>
+                <select value={form.pfm} onChange={e=>setForm(p=>({...p,pfm:e.target.value}))} style={{...INP,cursor:'pointer'}}>
+                  {PFMS.map(p=><option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                <label style={{fontSize:11,fontWeight:700,color:T.text3,textTransform:'uppercase'}}>Scheme E Units</label>
+                <input type="number" step="0.0001" value={form.e_u} onChange={e=>setForm(p=>({...p,e_u:e.target.value}))} placeholder="0.000" style={INP}/>
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                <label style={{fontSize:11,fontWeight:700,color:T.text3,textTransform:'uppercase'}}>Scheme C Units</label>
+                <input type="number" step="0.0001" value={form.c_u} onChange={e=>setForm(p=>({...p,c_u:e.target.value}))} placeholder="0.000" style={INP}/>
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                <label style={{fontSize:11,fontWeight:700,color:T.text3,textTransform:'uppercase'}}>Scheme G Units</label>
+                <input type="number" step="0.0001" value={form.g_u} onChange={e=>setForm(p=>({...p,g_u:e.target.value}))} placeholder="0.000" style={INP}/>
+              </div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:16}}>
+              <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                <label style={{fontSize:11,fontWeight:700,color:T.text3,textTransform:'uppercase'}}>Scheme E Target %</label>
+                <input type="number" value={form.e_p} onChange={e=>setForm(p=>({...p,e_p:e.target.value}))} placeholder="38" style={INP}/>
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                <label style={{fontSize:11,fontWeight:700,color:T.text3,textTransform:'uppercase'}}>Scheme C Target %</label>
+                <input type="number" value={form.c_p} onChange={e=>setForm(p=>({...p,c_p:e.target.value}))} placeholder="24" style={INP}/>
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                <label style={{fontSize:11,fontWeight:700,color:T.text3,textTransform:'uppercase'}}>Scheme G Target %</label>
+                <input type="number" value={form.g_p} onChange={e=>setForm(p=>({...p,g_p:e.target.value}))} placeholder="38" style={INP}/>
+              </div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:16}}>
+              <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                <label style={{fontSize:11,fontWeight:700,color:T.text3,textTransform:'uppercase'}}>Total Contribution (Rs.)</label>
+                <input type="number" value={form.tInv} onChange={e=>setForm(p=>({...p,tInv:e.target.value}))} placeholder="0" style={INP}/>
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                <label style={{fontSize:11,fontWeight:700,color:T.text3,textTransform:'uppercase'}}>Total Withdrawals (Rs.)</label>
+                <input type="number" value={form.tOut} onChange={e=>setForm(p=>({...p,tOut:e.target.value}))} placeholder="0" style={INP}/>
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                <label style={{fontSize:11,fontWeight:700,color:T.text3,textTransform:'uppercase'}}>Contributions (No.)</label>
+                <input type="number" value={form.nCont} onChange={e=>setForm(p=>({...p,nCont:e.target.value}))} placeholder="e.g. 183" style={INP}/>
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                <label style={{fontSize:11,fontWeight:700,color:T.text3,textTransform:'uppercase'}}>Start Date</label>
+                <input type="date" value={form.sDate} onChange={e=>setForm(p=>({...p,sDate:e.target.value}))} style={INP}/>
+              </div>
+            </div>
+            <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+              <NvBtn onClick={()=>setShowAdd(false)} T={T}>Cancel</NvBtn>
+              <NvBtn onClick={addPfm} variant="primary" T={T} disabled={!form.pfm}><Ic.Check/> Confirm Add</NvBtn>
+            </div>
+          </div>
+        )}
+
+        <div style={{background:T.surface2,borderRadius:12,border:`1px solid ${T.border}`,overflow:'hidden'}}>
+          <div style={{overflowX:'auto'}}>
+            <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+              <thead>
+                <tr style={{background:T.surface3}}>
+                  <th style={{...tdS,color:T.text3,fontSize:11,fontWeight:700,textTransform:'uppercase'}}>Fund Manager</th>
+                  <th style={{...tdS,color:T.text3,fontSize:11,fontWeight:700,textTransform:'uppercase'}}>Scheme E (Equity)</th>
+                  <th style={{...tdS,color:T.text3,fontSize:11,fontWeight:700,textTransform:'uppercase'}}>Scheme C (Corp)</th>
+                  <th style={{...tdS,color:T.text3,fontSize:11,fontWeight:700,textTransform:'uppercase'}}>Scheme G (Govt)</th>
+                  <th style={{...tdS,color:T.text3,fontSize:11,fontWeight:700,textTransform:'uppercase'}}>Date</th>
+                  <th style={{...tdS,color:T.text3,fontSize:11,fontWeight:700,textTransform:'uppercase'}}>Monthly Contribution</th>
+                  <th style={{...tdS,color:T.text3,fontSize:11,fontWeight:700,textTransform:'uppercase'}}>Total Value</th>
+                  <th style={tdS}/>
+                </tr>
+              </thead>
+              <tbody>
+                {(holdings||[]).map(h=>{
+                  const rowTotal = (h.e * (navs[getNavKey(h.pfm,'E')]||0)) + (h.c * (navs[getNavKey(h.pfm,'C')]||0)) + (h.g * (navs[getNavKey(h.pfm,'G')]||0));
+                  
+                  // XIRR Calc using synthetic cash flows
+                  let xirrVal = 0;
+                  if(h.tInv > 0 && h.sDate){
+                    const start = new Date(h.sDate);
+                    const end = new Date();
+                    const months = Math.max(1, (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()));
+                    const count = h.nCont > 0 ? h.nCont : months;
+                    const totalInv = parseFloat(h.tInv);
+                    let weightSum = 0;
+                    for(let i=0; i<count; i++) weightSum += Math.pow(1 + (growth/100), Math.floor(i/12));
+                    const firstCont = totalInv / weightSum;
+                    const cfs = [];
+
+                    // Generate investment outflows
+                    for(let i=0; i<count; i++){
+                      const gapMs = (end.getTime() - start.getTime()) / count;
+                      const time = start.getTime() + (gapMs * i);
+                      if(time > end.getTime()) break;
+                      const amt = firstCont * Math.pow(1 + (growth/100), Math.floor(i/12));
+                      cfs.push({date: time, amount: -amt});
+                    }
+                    
+                    // Withdrawal (positive cash in)
+                    if(h.tOut > 0){
+                      cfs.push({date: end.getTime() - 1000, amount: parseFloat(h.tOut)});
+                    }
+                    
+                    // Terminal Value (positive cash in)
+                    cfs.push({date: end.getTime(), amount: rowTotal});
+                    
+                    xirrVal = xirr(cfs);
+                  }
+
+                  return(
+                    <tr key={h.id} style={{borderBottom:`1px solid ${T.border}`}} onMouseEnter={e=>e.currentTarget.style.background=T.surface4} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                      <td style={{...tdS,fontWeight:700,color:T.text}}>
+                        <div style={{display:'flex',flexDirection:'column'}}>
+                          <span>{h.pfm}</span>
+                          <span style={{fontSize:10,color:T.text3,fontWeight:400}}>Target: {h.e_p}% E | {h.c_p}% C | {h.g_p}% G</span>
+                        </div>
+                      </td>
+                      <NavCell h={h} sch="E" units={h.e}/>
+                      <NavCell h={h} sch="C" units={h.c}/>
+                      <NavCell h={h} sch="G" units={h.g}/>
+                      <td style={tdS}>
+                        <input type="date" value={h.lastDate||new Date().toISOString().split('T')[0]} onChange={e=>setHoldings(holdings.map(x=>x.id===h.id?{...x, lastDate:e.target.value}:x))} style={{...INP, padding:'6px 10px', fontSize:11, width:110}}/>
+                      </td>
+                      <td style={tdS}>
+                        <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                          <input type="number" value={h.monthly} onChange={e=>setHoldings(holdings.map(x=>x.id===h.id?{...x, monthly:e.target.value}:x))} placeholder="Amount" style={{...INP, padding:'6px 10px', width:70, fontSize:12}}/>
+                          <button onClick={()=>invest(h.id)} style={{background:T.accent,border:'none',borderRadius:6,color:'#fff',padding:'6px 10px',cursor:'pointer',fontSize:11,fontWeight:700, whiteSpace:'nowrap'}}>Invest</button>
+                        </div>
+                      </td>
+                      <td style={{...tdS,fontWeight:800,color:T.accent,fontSize:14}}>{fmt(rowTotal,'INR')}</td>
+                      <td style={tdS}>
+                        <button onClick={()=>removePfm(h.id)} style={{background:'none',border:'none',cursor:'pointer',color:T.text3,padding:4}} onMouseEnter={e=>e.currentTarget.style.color=T.danger} onMouseLeave={e=>e.currentTarget.style.color=T.text3}><Ic.Trash/></button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {!(holdings||[]).length && (
+            <div style={{padding:60,textAlign:'center',color:T.text3,fontSize:14}}>No NPS holdings added. Track your retirement corpus by adding your Pension Fund Manager details above. <br/><span style={{fontSize:11, opacity:0.7, marginTop:8, display:'inline-block'}}>Click on the NAV value to manually edit it.</span></div>
+          )}
+        </div>
+        
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))',gap:20}}>
+          <div style={{background:T.surface2,borderRadius:12,padding:20,border:`1px solid ${T.border}`}}>
+            <div style={{fontSize:12,color:T.text3,fontWeight:700,textTransform:'uppercase',marginBottom:12, display:'flex', justifyContent:'space-between'}}>
+              <span>Asset Allocation</span>
+              <span style={{fontSize:10, textTransform:'none', opacity:0.7}}>*Click NAV to edit</span>
+            </div>
+            <div style={{display:'flex',flexDirection:'column',gap:12}}>
+              {[
+                {label:'Equity (E)', val:(holdings||[]).reduce((a,h)=>a+(h.e*(navs[getNavKey(h.pfm,'E')]||0)),0), color:T.accent},
+                {label:'Corporate (C)', val:(holdings||[]).reduce((a,h)=>a+(h.c*(navs[getNavKey(h.pfm,'C')]||0)),0), color:T.warning},
+                {label:'Government (G)', val:(holdings||[]).reduce((a,h)=>a+(h.g*(navs[getNavKey(h.pfm,'G')]||0)),0), color:T.success},
+              ].map(asset=>{
+                const pct=totalVal?(asset.val/totalVal*100):0;
+                return(
+                  <div key={asset.label}>
+                    <div style={{display:'flex',justifyContent:'space-between',fontSize:12,marginBottom:4}}>
+                      <span style={{color:T.text2}}>{asset.label}</span>
+                      <span style={{fontWeight:700,color:T.text}}>{pct.toFixed(1)}%</span>
+                    </div>
+                    <div style={{height:6,background:T.surface4,borderRadius:3,overflow:'hidden'}}>
+                      <div style={{height:'100%',width:`${pct}%`,background:asset.color,borderRadius:3}}/>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

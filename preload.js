@@ -29,5 +29,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Secure cross-origin fetch via main process
   netFetch:      (url, options) => ipcRenderer.invoke('net-fetch', url, options),
+  scrapeInvesting: (symbol)      => ipcRenderer.invoke('scrape-investing', symbol),
+  scrapeMoneycontrol: (url)      => ipcRenderer.invoke('scrape-mc-nps', url),
 });
 

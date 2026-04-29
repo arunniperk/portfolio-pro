@@ -70,6 +70,8 @@ function SettingsPanel({tweaks,onUpdate,onClose,groqKey,geminiKey,primaryAI,onSa
   const [newKey,setNewKey]=useState('');
   const [testing,setTesting]=useState(false);
   const [testResult,setTestResult]=useState(null);
+  const [pinEntry,setPinEntry]=useState('');
+  const [showPinForm,setShowPinForm]=useState(false);
   const testKey=async(provider)=>{
     setTesting(true);setTestResult(null);
     try{
@@ -84,7 +86,11 @@ function SettingsPanel({tweaks,onUpdate,onClose,groqKey,geminiKey,primaryAI,onSa
     const gmk=provider==='gemini'?newKey.trim():geminiKey||'';
     onSaveAIKeys(gk,gmk,primaryAI);setEditing(null);
   };
-  const removeKey=(provider)=>onSaveAIKeys(provider==='groq'?'':groqKey||'',provider==='gemini'?'':geminiKey||'',primaryAI);
+  const removeKey=(provider)=>{
+    if(window.confirm(`Are you sure you want to remove the ${provider} API key? AI analysis will be disabled for this provider.`)){
+      onSaveAIKeys(provider==='groq'?'':groqKey||'',provider==='gemini'?'':geminiKey||'',primaryAI);
+    }
+  };
   const setPrim=(p)=>onSaveAIKeys(groqKey||'',geminiKey||'',p);
   const PROVS=[
     {id:'groq',   label:'Groq',   icon:'⚡', grad:'linear-gradient(135deg,#f55036,#ff8c00)', key:groqKey, ph:'gsk_…'},
@@ -145,6 +151,51 @@ function SettingsPanel({tweaks,onUpdate,onClose,groqKey,geminiKey,primaryAI,onSa
             })}
             {groqKey&&geminiKey&&<div style={{fontSize:11,color:T.text3}}>Both configured — <b style={{color:T.text}}>{primaryAI==='groq'?'Groq':'Gemini'}</b> is primary with auto-fallback.</div>}
           </div>
+          <div style={{borderTop:`1px solid ${T.border}`,paddingTop:14}}>
+            <div style={{fontSize:11,fontWeight:700,color:T.text3,textTransform:'uppercase',letterSpacing:'.06em',marginBottom:10}}>Privacy & Security</div>
+            <div style={{background:T.surface3,borderRadius:8,border:`1px solid ${T.border}`,padding:'10px 12px'}}>
+              <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+                <div style={{width:24,height:24,borderRadius:5,background:'linear-gradient(135deg,#76b900,#4a7500)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12}}>🔒</div>
+                <span style={{fontSize:12,fontWeight:700,color:T.text,flex:1}}>Password Protection</span>
+                {tweaks.pin ? <span style={{fontSize:9,background:T.successBg,color:T.success,padding:'2px 6px',borderRadius:8,fontWeight:700}}>Locked</span> : <span style={{fontSize:9,background:T.surface4,color:T.text3,padding:'2px 6px',borderRadius:8}}>Unlocked</span>}
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                <div style={{display:'flex',gap:6}}>
+                  <NvBtn onClick={()=>setShowPinForm(!showPinForm)} T={T}>{tweaks.pin ? 'Manage PIN' : 'Set PIN'}</NvBtn>
+                </div>
+                {showPinForm && (
+                  <div style={{background:T.surface4,padding:12,borderRadius:8,display:'flex',flexDirection:'column',gap:10}}>
+                    <div style={{fontSize:11,color:T.text2}}>{tweaks.pin ? "Change or Remove PIN" : "Enter 4-digit PIN"}</div>
+                    <NvInput type="password" value={pinEntry} onChange={e=>setPinEntry(e.target.value.replace(/\D/g,'').slice(0,4))} placeholder="4-digit PIN" T={T}/>
+                    <div style={{display:'flex',gap:6}}>
+                      <NvBtn onClick={()=>{
+                        if(pinEntry.length!==4) { alert("PIN must be 4 digits"); return; }
+                        if(tweaks.pin){
+                          const cur = window.prompt("Enter current PIN to confirm:");
+                          if(cur !== tweaks.pin) { alert("Incorrect current PIN"); return; }
+                        }
+                        onUpdate('pin', pinEntry);
+                        alert("PIN updated successfully");
+                        setShowPinForm(false);
+                        setPinEntry('');
+                      }} variant="primary" T={T}>Save</NvBtn>
+                      {tweaks.pin && <NvBtn onClick={()=>{
+                        const cur = window.prompt("Enter current PIN to confirm removal:");
+                        if(cur === tweaks.pin) {
+                          onUpdate('pin', '');
+                          alert("PIN removed");
+                          setShowPinForm(false);
+                          setPinEntry('');
+                        } else if(cur !== null) {
+                          alert("Incorrect current PIN");
+                        }
+                      }} variant="danger" T={T}>Remove</NvBtn>}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -188,6 +239,7 @@ function BottomNav({activeId, activeModule, onSwitch, T, NAV, MOD_NAV}) {
   const items = [
     {id: 'IN', label: 'Indian', icon: <Ic.India/>},
     {id: 'US', label: 'US', icon: <Ic.US/>},
+    {id: 'NPS', label: 'NPS', icon: '🛡️'},
     {id: 'watchlist', label: 'Watch', icon: '👁'},
     {id: 'news', label: 'News', icon: '📰'},
     {id: 'alerts', label: 'Alerts', icon: '🔔'},
@@ -217,9 +269,12 @@ const NewsModule      = lazy(() => import('./modules').then(m => ({ default: m.N
 const HistoryModule   = lazy(() => import('./modules').then(m => ({ default: m.HistoryModule })));
 const WatchlistModule = lazy(() => import('./modules').then(m => ({ default: m.WatchlistModule })));
 const WatchlistHistoryModule = lazy(() => import('./modules').then(m => ({ default: m.WatchlistHistoryModule })));
+const NPSModule       = lazy(() => import('./modules').then(m => ({ default: m.NPSModule })));
 
 function AppInner() {
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoaded,setIsLoaded]=useState(false);
+  const [isLocked,setIsLocked]=useState(false);
+  const [pinInput,setPinInput]=useState('');
   const [tweaks,setTweaks]=useState(TWEAK_DEF);
   const [portfolios,setPortfolios]=useState(DEF_PF);
   const [activeId,setActiveId]=useState(1);
@@ -229,18 +284,37 @@ function AppInner() {
   const [geminiKey,setGeminiKey]=useState('');
   const [primaryAI,setPrimaryAI]=useState('groq');
   const [history,setHistory]=useState([]);
+  const [navs,setNavs]=useState({
+    'SBI_E': 48.25, 'SBI_C': 32.10, 'SBI_G': 28.45,
+    'HDFC_E': 52.12, 'HDFC_C': 34.50, 'HDFC_G': 30.15,
+    'ICICI_E': 50.80, 'ICICI_C': 33.20, 'ICICI_G': 29.40,
+    'LIC_E': 42.15, 'LIC_C': 31.05, 'LIC_G': 27.90,
+    'UTI_E': 70.4812, 'UTI_C': 40.3962, 'UTI_G': 36.6234
+  });
   const [alerts,setAlerts]=useState([]);
+  const [npsHoldings,setNpsHoldings]=useState([]);
+  const [npsGrowth,setNpsGrowth]=useState(7);
 
   useEffect(() => {
     // Run after initial mount to keep the UI thread responsive
     setTimeout(() => {
       try {
-        const sTweaks = getItemSync('pm_tweaks');
-        if(sTweaks) setTweaks({...TWEAK_DEF, ...JSON.parse(sTweaks)});
+        const sTwk=getItemSync('pm_tweaks');
+        if(sTwk){
+          const t = JSON.parse(sTwk);
+          setTweaks({...TWEAK_DEF, ...t});
+          if(t.pin) setIsLocked(true);
+        }
         
         const sPfs = getItemSync('pm_portfolios');
         if(sPfs) setPortfolios(JSON.parse(sPfs));
         
+        const sNps = getItemSync('pm_nps');
+        if(sNps) setNpsHoldings(JSON.parse(sNps));
+        
+        const sGrowth = getItemSync('pm_nps_growth');
+        if(sGrowth) setNpsGrowth(parseFloat(sGrowth));
+
         const sActive = getItemSync('pm_activeId');
         if(sActive) setActiveId(JSON.parse(sActive));
         
@@ -251,7 +325,9 @@ function AppInner() {
         setPrimaryAI(getItemSync('pm_primary_ai') || 'groq');
         const todayStr = new Date().toISOString().slice(0, 10);
         const rawHistory = JSON.parse(getItemSync('pm_portfolio_history') || '[]');
-        setHistory(rawHistory.filter(h => h.date >= todayStr));
+        setHistory(rawHistory.slice(-365));
+        const sNavs = getItemSync('pm_nps_navs');
+        if(sNavs) setNavs(JSON.parse(sNavs));
         const rawAlerts = JSON.parse(getItemSync('pm_alerts') || '[]');
         setAlerts(rawAlerts.map(a => ({
           ...a,
@@ -353,9 +429,20 @@ function AppInner() {
   const setTargets=fn=>setPortfolios(ps=>ps.map(p=>p.id===activeId?{...p,targets:typeof fn==='function'?fn(p.targets):fn}:p));
   const addPortfolio=()=>{const id=Date.now(),n=portfolios.length+1;setPortfolios(ps=>[...ps,{id,name:`Portfolio ${n}`,holdings:[],targets:{}}]);setActiveId(id);};
   const renamePortfolio=(id,name)=>setPortfolios(ps=>ps.map(p=>p.id===id?{...p,name}:p));
-  const deletePortfolio=id=>{if(portfolios.length<=1)return;const r=portfolios.filter(p=>p.id!==id);setPortfolios(r);if(activeId===id)setActiveId(r[0].id);};
+  const deletePortfolio=id=>{
+    if(portfolios.length<=1)return;
+    if(window.confirm("Are you sure you want to delete this entire portfolio? This action cannot be undone.")){
+      const r=portfolios.filter(p=>p.id!==id);
+      setPortfolios(r);
+      if(activeId===id)setActiveId(r[0].id);
+    }
+  };
   const addHolding=h=>setHoldings(p=>[...p,h]);
-  const removeHolding=id=>setHoldings(p=>p.filter(h=>h.id!==id));
+  const removeHolding=id=>{
+    if(window.confirm("Are you sure you want to remove this stock from your portfolio?")){
+      setHoldings(p=>p.filter(h=>h.id!==id));
+    }
+  };
   const saveTarget=(id,val)=>setTargets(p=>val==null?Object.fromEntries(Object.entries(p).filter(([k])=>+k!==id)):{...p,[id]:val});
   const saveUnpledgedQty=(id,val)=>setHoldings(p=>p.map(h=>h.id===id?{...h,unpledgedQty:val}:h));
   const importHoldings=rows=>{const nt={};const nh=rows.map(({analystTarget,...h})=>{if(analystTarget!=null)nt[h.id]=analystTarget;return h;});setHoldings(p=>[...p,...nh]);if(Object.keys(nt).length)setTargets(p=>({...p,...nt}));};
@@ -366,6 +453,9 @@ function AppInner() {
   useEffect(()=>{if(isLoaded)setItemSync('pm_tweaks',JSON.stringify(tweaks));},[tweaks,isLoaded]);
   useEffect(()=>{if(isLoaded)setItemSync('pm_portfolio_history',JSON.stringify(history));},[history,isLoaded]);
   useEffect(()=>{if(isLoaded)setItemSync('pm_alerts',JSON.stringify(alerts));},[alerts,isLoaded]);
+  useEffect(()=>{if(isLoaded)setItemSync('pm_nps',JSON.stringify(npsHoldings));},[npsHoldings,isLoaded]);
+  useEffect(()=>{if(isLoaded)setItemSync('pm_nps_navs',JSON.stringify(navs));},[navs,isLoaded]);
+  useEffect(()=>{if(isLoaded)setItemSync('pm_nps_growth',JSON.stringify(npsGrowth));},[npsGrowth,isLoaded]);
   useEffect(()=>{if(window.electronAPI?.onUpdateAvailable)window.electronAPI.onUpdateAvailable(()=>setUpdateAvail(true));},[]);
   const fetchPrices=useCallback(async()=>{
     if(!holdings.length)return;setLoading(true);setError(null);const out={};
@@ -404,7 +494,57 @@ function AppInner() {
       return anyNew ? merged : prev;
     });
     setLastUpdated(new Date());setLoading(false);
-  },[holdings]); 
+  },[holdings]);
+
+  // Global background snapshot logic
+  useEffect(() => {
+    if(!isLoaded || !portfolios.length) return;
+    
+    // Aggregate total value across all portfolios + NPS
+    let totalInrVal = 0;
+    let totalInrInv = 0;
+    let totalUsdVal = 0;
+    let totalUsdInv = 0;
+
+    portfolios.forEach(p => {
+      p.holdings.forEach(h => {
+        const pr = prices[h.symbol];
+        if(!pr) return;
+        const curVal = h.qty * pr.current;
+        if(pr.currency === 'USD') {
+          totalUsdVal += curVal;
+          totalUsdInv += h.invested;
+          totalInrVal += curVal * (usdInr || 83.5);
+          totalInrInv += h.invested * (usdInr || 83.5);
+        } else {
+          totalInrVal += curVal;
+          totalInrInv += h.invested;
+        }
+      });
+    });
+
+    // Add NPS values
+    const npsVal = (npsHoldings||[]).reduce((a,h)=>{
+      const getNavKey=(pfm,s)=>pfm.split(' ')[0].toUpperCase() + '_' + s;
+      const v = (h.e * (navs[getNavKey(h.pfm,'E')]||0)) + (h.c * (navs[getNavKey(h.pfm,'C')]||0)) + (h.g * (navs[getNavKey(h.pfm,'G')]||0));
+      return a+v;
+    },0);
+    const npsInv = (npsHoldings||[]).reduce((a,h)=>a+(parseFloat(h.tInv)||0),0);
+    
+    const finalInrVal = Math.round(totalInrVal + npsVal);
+    const finalInrInv = Math.round(totalInrInv + npsInv);
+    const today = new Date().toISOString().slice(0,10);
+
+    setHistory(prev => {
+      const existing = prev.find(p => p.date === today);
+      if(existing) {
+        const diff = Math.abs(existing.inrVal - finalInrVal) / Math.max(existing.inrVal, 1);
+        if(diff < 0.0005) return prev; // 0.05% threshold
+        return prev.map(p => p.date === today ? { ...p, inrVal: finalInrVal, inrInv: finalInrInv, npsVal: Math.round(npsVal), portfolioVal: Math.round(totalInrVal), usdVal: Math.round(totalUsdVal), usdInv: Math.round(totalUsdInv) } : p);
+      }
+      return [...prev, { date: today, inrVal: finalInrVal, inrInv: finalInrInv, npsVal: Math.round(npsVal), portfolioVal: Math.round(totalInrVal), usdVal: Math.round(totalUsdVal), usdInv: Math.round(totalUsdInv) }].slice(-365);
+    });
+  }, [prices, npsHoldings, navs, usdInr, portfolios, isLoaded]);
   useEffect(()=>{
     fetchPrices();
     const ms=(tweaks.autoRefreshMins||5)*60*1000;
@@ -465,27 +605,36 @@ function AppInner() {
         if(j?.success && j?.data) ttData=j.data;
       }
 
-      // ── 4. Merge all sources — v10 wins for fundamentals ────────────────────
+      // ── 4. Investing.com fallback (Best for both IN/US if Yahoo fails) ─────
+      let invData = null;
+      if (window.electronAPI?.scrapeInvesting) {
+        // Only scrape if Yahoo is missing key fields
+        if (!qs.summaryDetail?.trailingPE || !qs.defaultKeyStatistics?.trailingEps) {
+          invData = await window.electronAPI.scrapeInvesting(symbol);
+        }
+      }
+
+      // ── 5. Merge all sources — v10 wins for fundamentals ────────────────────
       const sd=qs.summaryDetail||{}, fd=qs.financialData||{}, ks=qs.defaultKeyStatistics||{}, pd=qs.price||{}, ttRatios=ttData.ratios||{};
       const betaVal=n(sd.beta)??n(ks.beta)??n(qd.beta)??n(qd.beta3Year)??n(meta.beta);
-      const divYield=n(sd.dividendYield)??n(sd.trailingAnnualDividendYield)??n(qd.trailingAnnualDividendYield)??(ttRatios.divYield?ttRatios.divYield/100:null);
+      const divYield=n(sd.dividendYield)??n(sd.trailingAnnualDividendYield)??n(qd.trailingAnnualDividendYield)??(ttRatios.divYield?ttRatios.divYield/100:null)??invData?.divYield;
       const summary={
         price:{
-          marketCap:           n(pd.marketCap)??n(qd.marketCap)??n(meta.marketCap)??(ttRatios.marketCap?ttRatios.marketCap*1e7:null),
+          marketCap:           n(pd.marketCap)??n(qd.marketCap)??n(meta.marketCap)??(ttRatios.marketCap?ttRatios.marketCap*1e7:null)??invData?.marketCap,
           regularMarketVolume: n(pd.regularMarketVolume)??n(qd.regularMarketVolume)??n(meta.regularMarketVolume),
           shortName:           pd.shortName??qd.shortName??meta.shortName,
           recommendationKey:   fd.recommendationKey??qd.recommendationKey,
           targetMeanPrice:     n(fd.targetMeanPrice)??n(qd.targetMeanPrice),
         },
         summaryDetail:{
-          trailingPE:       n(sd.trailingPE)??n(qd.trailingPE)??n(ttRatios.ttmPe),
+          trailingPE:       n(sd.trailingPE)??n(qd.trailingPE)??n(ttRatios.ttmPe)??invData?.pe,
           fiftyTwoWeekHigh: n(sd.fiftyTwoWeekHigh)??n(qd.fiftyTwoWeekHigh)??n(meta.fiftyTwoWeekHigh),
           fiftyTwoWeekLow:  n(sd.fiftyTwoWeekLow)??n(qd.fiftyTwoWeekLow)??n(meta.fiftyTwoWeekLow),
           beta:             betaVal,
           dividendYield:    divYield,
         },
         defaultKeyStatistics:{
-          trailingEps:             n(ks.trailingEps)??n(qd.epsTrailingTwelveMonths)??n(ttRatios.eps),
+          trailingEps:             n(ks.trailingEps)??n(qd.epsTrailingTwelveMonths)??n(ttRatios.eps)??invData?.eps,
           numberOfAnalystOpinions: n(ks.numberOfAnalystOpinions)??n(qd.numberOfAnalystOpinions),
         },
         financialData:{
@@ -601,8 +750,9 @@ Respond ONLY as a JSON object with these keys:
 
   // Left sidebar nav items
   const NAV=[
-    {id:'IN', label:'Indian Equity', icon:<Ic.India/>, flag:'🇮🇳', color:T.inColor},
-    {id:'US', label:'US Equity',     icon:<Ic.US/>,    flag:'🇺🇸', color:T.usColor},
+    {id:'IN',  label:'Indian Equity', icon:<Ic.India/>, flag:'🇮🇳', color:T.inColor},
+    {id:'US',  label:'US Equity',     icon:<Ic.US/>,    flag:'🇺🇸', color:T.usColor},
+    {id:'NPS', label:'NPS Portfolio', icon:'🛡️',       flag:'🛡️', color:T.accent},
   ];
   const MOD_NAV=[
     {id:'watchlist', label:'Watchlist',  icon:'👁', color:'#a855f7'},
@@ -646,7 +796,7 @@ Respond ONLY as a JSON object with these keys:
           </div>
           <div>
             <div style={{fontSize:14,fontWeight:700,color:T.text,letterSpacing:'-.01em'}}>Portfolio Manager</div>
-            <div style={{fontSize:10,color:T.text3,marginTop:1}}>Arun Verma · v4.6.2</div>
+            <div style={{fontSize:10,color:T.text3,marginTop:1}}>Arun Verma · v4.6.9</div>
           </div>
         </div>
 
@@ -742,6 +892,7 @@ Respond ONLY as a JSON object with these keys:
             <button onClick={()=>setShowSettings(v=>!v)} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:6,background:showSettings?T.accentBg:'transparent',border:'none',cursor:'pointer',width:'100%',color:showSettings?T.accent:T.text3,transition:'all .15s',fontSize:12}}>
               <Ic.Settings/> Settings
             </button>
+            <div style={{fontSize:9,color:T.text3,textAlign:'center',marginTop:8,letterSpacing:'.05em',opacity:0.6}}>VERSION 4.8.0</div>
             </div>
           </div>
         </div>
@@ -755,7 +906,7 @@ Respond ONLY as a JSON object with these keys:
             {activeModule==='sectors'&&<SectorModule T={T} rows={allRows} prices={prices} usdInr={usdInr} onClose={()=>setActiveModule(null)}/>}
             {activeModule==='news'&&<NewsModule T={T} holdings={uniqueHoldings} onClose={()=>setActiveModule(null)}/>}
             {activeModule==='benchmark'&&<BenchmarkModule T={T} rows={rows} inRows={inRows} usRows={usRows} usdInr={usdInr} history={history} onClose={()=>setActiveModule(null)}/>}
-            {activeModule==='history'&&<HistoryModule T={T} rows={allRows} usdInr={usdInr} history={history} setHistory={setHistory} onClose={()=>setActiveModule(null)}/>}
+            {activeModule==='history'&&<HistoryModule T={T} history={history} setHistory={setHistory} onClose={()=>setActiveModule(null)}/>}
           </Suspense>
           {!activeModule&&activeStock?(
             <StockDetailView symbol={activeStock} holding={rows.find(r=>r.symbol===activeStock)} detail={stockDetails[activeStock]} prices={prices} targets={targets} onSaveTarget={saveTarget} onRefresh={()=>fetchStockDetail(activeStock,stockDetails[activeStock]?.range||'3mo')} onRangeChange={(sym,range)=>fetchStockDetail(sym,range)} groqKey={groqKey} geminiKey={geminiKey} primaryAI={primaryAI} aiAnalysis={aiAnalyses[activeStock]} onAIRefresh={(prov)=>{const r=rows.find(r=>r.symbol===activeStock);fetchAIAnalysis(activeStock,r,r?.curPrice,r?.currency,prov);}} T={T}/>
@@ -768,6 +919,7 @@ Respond ONLY as a JSON object with these keys:
                 <div style={{overflowY:'auto',padding:20}}>
                   {mainTab==='IN'&&<Section title="Indian Equity" flag="🇮🇳" accent={T.inColor} rows={inRows} currency="INR" onImportCSV={()=>setImportModal('IN')} onRowClick={openStockTab} {...sharedProps}/>}
                   {mainTab==='US'&&<Section title="US Equity" flag="🇺🇸" accent={T.usColor} rows={usRows} currency="USD" usdInr={usdInr} onImportCSV={()=>setImportModal('US')} onRowClick={openStockTab} {...sharedProps}/>}
+                  {mainTab==='NPS'&&<Suspense fallback={<div style={{padding:40,color:T.text3}}>Loading NPS...</div>}><NPSModule T={T} holdings={npsHoldings} setHoldings={setNpsHoldings} navs={navs} setNavs={setNavs} growth={npsGrowth} setGrowth={setNpsGrowth} onClose={()=>setMainTab('IN')}/></Suspense>}
                 </div>
                 <div className="right-sidebar" style={{overflowY:'auto',padding:rightSidebarCollapsed?0:'20px 16px 20px 0',borderLeft:rightSidebarCollapsed?'none':`1px solid ${T.border}`,opacity:rightSidebarCollapsed?0:1,transition:'opacity 0.2s'}}>
                   <div style={{padding:'0 0 0 16px'}}>
@@ -785,6 +937,43 @@ Respond ONLY as a JSON object with these keys:
       {showSettings&&<SettingsPanel tweaks={tweaks} onUpdate={(k,v)=>setTweaks(p=>({...p,[k]:v}))} onClose={()=>setShowSettings(false)} groqKey={groqKey} geminiKey={geminiKey} primaryAI={primaryAI} onSaveAIKeys={saveAIKeys} T={T}/>}
       {importModal&&<CSVImportModal market={importModal} onImport={importHoldings} onClose={()=>setImportModal(null)} T={T}/>}
       {isMobile && <BottomNav activeId={mainTab} activeModule={activeModule} onSwitch={(id) => {if(id==='IN'||id==='US'){setMainTab(id);setActiveModule(null);}else{setActiveModule(id);}}} T={T} NAV={NAV} MOD_NAV={MOD_NAV}/>}
+
+      {isLocked && (
+        <div style={{position:'fixed',inset:0,background:T.bg,zIndex:10000,display:'flex',alignItems:'center',justifyContent:'center'}}>
+          <div style={{width:300,textAlign:'center'}}>
+            <div style={{fontSize:48,marginBottom:20}}>🔒</div>
+            <div style={{fontSize:18,fontWeight:700,color:T.text,marginBottom:8}}>Portfolio Manager Pro</div>
+            <div style={{fontSize:13,color:T.text3,marginBottom:24}}>Enter your 4-digit PIN to continue</div>
+            <div style={{display:'flex',justifyContent:'center',gap:12,marginBottom:32}}>
+              {[0,1,2,3].map(i=>(
+                <div key={i} style={{width:16,height:16,borderRadius:8,background:pinInput.length>i?T.accent:T.surface4,border:`1px solid ${T.border}`}}/>
+              ))}
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,maxWidth:240,margin:'0 auto'}}>
+              {[1,2,3,4,5,6,7,8,9].map(n=>(
+                <button key={n} onClick={()=>{
+                  if(pinInput.length<4){
+                    const ni = pinInput + n;
+                    setPinInput(ni);
+                    if(ni === tweaks.pin) { setIsLocked(false); setPinInput(''); }
+                    else if(ni.length===4) { alert("Incorrect PIN"); setPinInput(''); }
+                  }
+                }} style={{aspectRatio:'1/1',borderRadius:12,background:T.surface2,border:`1px solid ${T.border}`,color:T.text,fontSize:20,fontWeight:700,cursor:'pointer'}} onMouseEnter={e=>e.currentTarget.style.background=T.surface3} onMouseLeave={e=>e.currentTarget.style.background=T.surface2}>{n}</button>
+              ))}
+              <div/>
+              <button onClick={()=>{
+                 if(pinInput.length<4){
+                   const ni = pinInput + '0';
+                   setPinInput(ni);
+                   if(ni === tweaks.pin) { setIsLocked(false); setPinInput(''); }
+                   else if(ni.length===4) { alert("Incorrect PIN"); setPinInput(''); }
+                 }
+              }} style={{aspectRatio:'1/1',borderRadius:12,background:T.surface2,border:`1px solid ${T.border}`,color:T.text,fontSize:20,fontWeight:700,cursor:'pointer'}} onMouseEnter={e=>e.currentTarget.style.background=T.surface3} onMouseLeave={e=>e.currentTarget.style.background=T.surface2}>0</button>
+              <button onClick={()=>setPinInput(p=>p.slice(0,-1))} style={{aspectRatio:'1/1',borderRadius:12,background:T.surface2,border:`1px solid ${T.border}`,color:T.text3,fontSize:14,cursor:'pointer'}} onMouseEnter={e=>e.currentTarget.style.background=T.surface3} onMouseLeave={e=>e.currentTarget.style.background=T.surface2}>⌫</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isClosing && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',backdropFilter:'blur(8px)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>

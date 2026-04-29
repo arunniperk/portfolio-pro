@@ -61,3 +61,33 @@ export async function yahooSearch(query) {
   }
   return quotes;
 }
+export const xirr = (cashFlows) => {
+  if (!cashFlows || cashFlows.length < 2) return 0;
+  const maxIterations = 100;
+  const precision = 1e-7;
+  // Sort by date to ensure the pivot is the earliest entry
+  const sorted = [...cashFlows].sort((a,b)=>a.date-b.date);
+  let rate = 0.1;
+  // Try multiple starting points if needed
+  const seeds = [0.1, 0.05, 0.15, 0, -0.05];
+  for (const seed of seeds) {
+    rate = seed;
+    for (let i = 0; i < maxIterations; i++) {
+      let f = 0;
+      let df = 0;
+      for (const cf of sorted) {
+        const years = (cf.date - sorted[0].date) / (1000 * 60 * 60 * 24 * 365.25);
+        const factor = Math.pow(1 + rate, years);
+        f += cf.amount / factor;
+        df -= (years * cf.amount) / (factor * (1 + rate));
+      }
+      if (Math.abs(f) < precision) return rate * 100;
+      if (Math.abs(df) < precision) break;
+      const nextRate = rate - f / df;
+      if (Math.abs(nextRate - rate) < precision) return nextRate * 100;
+      rate = nextRate;
+      if (isNaN(rate) || !isFinite(rate)) break;
+    }
+  }
+  return rate * 100;
+};
