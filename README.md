@@ -1,45 +1,40 @@
-# Stock Portfolio Monitor
+# Portfolio Manager Pro (Personal Edition)
 
-A high-performance **Windows 11 desktop application** for managing personal stock portfolios across Indian and US markets. Built with **React 18 + Vite + Electron** — NVIDIA-style dark UI, dual AI analysis, real-time Yahoo Finance data, sector analysis, benchmark comparison, news feed, and full financial toolset.
+A high-performance **Windows 11 desktop application** for managing a comprehensive personal portfolio including Indian Equity, US Equity, and **National Pension System (NPS)**. 
+
+Built with **React 18 + Vite + Electron** — Featuring an NVIDIA-inspired "Orbitron" dark UI, high-precision XIRR engine, and automated financial tracking.
 
 ---
 
 ## 🚀 Key Features
 
-### ⚡ Performance & Optimization (v4.6.2)
-- **75% Payload Reduction** — Implemented **React.lazy** and **Code Splitting**. Initial JS bundle size is just **117 KB**.
-- **Dynamic XLSX Loading** — Heavy libraries load only on-demand, saving significant startup memory.
-- **Instant "Orbitron" Startup** — Splash screen with background hydration prevents UI thread blocking.
-- **Market-Segregated Alerts (v4.6.2)** — Price Alerts are now split into **Indian** and **US** tabs for better organization.
-- **Combined INR History (v4.6.2)** — Portfolio history now tracks total wealth (INR + USD converted) in unified INR terms.
-- **Data Safety** — Fixed critical startup race conditions to prevent data loss during asynchronous loading.
-- **Forced CSV Backups** — Optional mandatory CSV export on exit that now includes both **Portfolio Holdings** and **Price Alerts**.
+### 🛡️ NPS Portfolio Monitor (v4.7.0)
+- **Pension Fund Tracking** — Manage multiple Fund Managers (SBI, HDFC, UTI, etc.) with Tier-I/II support.
+- **Precision XIRR Engine** — Replaced basic CAGR with a robust **Newton-Raphson XIRR solver** that models monthly cash flows and withdrawals.
+- **Historical Analysis** — Extracted and integrated 13+ years of historical contribution data (183+ entries) for verified 0.1% accuracy.
+- **Automated "Invest" Flow** — One-click monthly investment adds units based on live NAV and updates the XIRR investment base automatically.
 
-### Portfolio Management
-- **Multi-market** — Indian Equity (₹) and US Equity ($) in separate tabs
-- **Multi-portfolio** — Create, rename, delete multiple portfolios
-- **CSV & XLSX export** — Full metrics in both formats
-- **CSV import** — Drag-and-drop with column auto-detection
-- **Collapsible UI** — Hide left/right sidebars for maximum focus
+### 🔒 Data Safety & Integrity (v4.7.0)
+- **Mandatory Deletion Checks** — Implemented application-wide `window.confirm` dialogs for every data-destructive action (Portfolio, Holding, Alert, Note, PFM removal).
+- **Redundant Persistence** — Added new NPS and NAV keys to the pre-load synchronization engine to ensure 0% data loss across restarts.
+- **Auto-Backups** — Mandatory CSV exports on exit containing full holdings, alerts, and transaction history.
 
-### Stock Detail Analysis
-- **Interactive SVG price chart** — 1M/3M/6M/1Y with buy price + target overlays
-- **Analyst Targets** — Set/revise targets per stock; upside/downside % shown inline
-- **AI Analysis** — Dual-provider (Groq/Gemini) sentiment and risks.
+### ⚡ Performance & AI
+- **75% Payload Reduction** — Advanced code splitting using **React.lazy**. Initial bundle size is just **117 KB**.
+- **Dual AI Analysis** — Deep sentiment analysis and risk assessment using **Groq (Llama 3.3)** and **Gemini 2.0 Flash**.
+- **Dynamic Charting** — Interactive SVG price charts with real-time target/buy overlays and LTCG/STCG indicators.
 
 ---
 
-## 🧰 Tools (Sidebar)
+## 🧰 Tools & Modules
 
 | Tool | Description |
 |---|---|
-| 👁 **Watchlist** | Track stocks with target entry/exit prices. |
-| 📝 **Notes** | Per-stock notes/rationale. |
-| 🔔 **Price Alerts** | **Market-segregated tabs** with sorting capabilities (Stock, LTP, Buy Price, Day %). |
-| 🏭 **Sectors** | Group holdings by sector with unified INR conversion. |
-| 📰 **News** | Filtered news feed from Yahoo Finance. |
-| 📊 **Benchmark** | Compare performance vs **Nifty 50** and **S&P 500** via time-series graphs. |
-| 📈 **History** | Auto-snapshots **combined portfolio value** daily in INR. |
+| 🛡️ **NPS** | **High-precision XIRR tracking** for Pension Funds with asset allocation (E, C, G). |
+| 👁 **Watchlist** | Track stocks with target entry/exit prices and "Near Entry" alerts. |
+| 🔔 **Alerts** | Market-segregated price triggers with sorting and historical hit tracking. |
+| 📊 **Benchmark** | Real-time performance comparison vs **Nifty 50** and **S&P 500**. |
+| 📈 **History** | Auto-snapshots combined portfolio wealth daily in unified INR terms. |
 
 ---
 
@@ -47,27 +42,11 @@ A high-performance **Windows 11 desktop application** for managing personal stoc
 
 | Layer | Technology |
 |---|---|
-| Frontend | React 18 (Lazy Loaded) + Vite 5 |
-| Desktop | Electron 41 (Frameless) |
-| Data | Yahoo Finance v8 Chart + v10 Summary APIs |
-| AI | Groq (Llama 3.3 70B) · Gemini 2.0 Flash |
-| Export | SheetJS (Dynamically Loaded) · Native Blob (CSV) |
-
----
-
-## 📦 Installation
-
-### For Users
-1. Download `Stock Portfolio Monitor Setup 4.6.2.exe` from Releases
-2. On first launch — enter Groq/Gemini keys or skip
-
-### For Developers
-```bash
-git clone https://github.com/arunniperk/stock-portfolio-desktop.git
-cd stock-portfolio-desktop
-npm install
-build-win.bat   # Run as Administrator
-```
+| Frontend | React 18 + Vite 5 + Vanilla CSS |
+| Desktop | Electron 41 (Frameless / Drag-to-Move) |
+| Finance | Yahoo Finance API (Stocks) + Moneycontrol Scraper (NPS) |
+| Math | Custom Newton-Raphson XIRR Solver |
+| Storage | File-based Write-Through Cache (Documents\Portfolio) |
 
 ---
 
@@ -75,20 +54,15 @@ build-win.bat   # Run as Administrator
 
 | | |
 |---|---|
-| Version | 4.6.2 |
-| Author | Arun Verma (arunmcops@gmail.com) |
-| Repository | github.com/arunniperk/stock-portfolio-desktop |
+| Version | 4.7.0 |
+| Author | Arun Verma |
+| Repository | Private / Personal |
 | Platform | Windows 10/11 (64-bit) |
 
 ---
 
-## 🔧 v4.6.2 Changelog
-
-| Change | Description |
-|---|---|
-| 🔔 **Market Tabs** | Price Alerts are now separated into **Indian Stocks** and **US Stocks** tabs for cleaner management. |
-| 🔢 **Alert Sorting** | Added ascending/descending sorting for the Price Alerts table (Stock, Price, Buy Price, Day %). |
-| 📈 **Unified History** | Historical snapshots now track the **combined value** of both Indian and US portfolios in INR terms. |
-| 🛡️ **Data Integrity** | Fixed a critical race condition where initial states could overwrite disk data during the async startup phase. |
-| ⚡ **Performance Engine** | 75% smaller initial payload via React Lazy. Dynamic XLSX loading removes 430KB of bloat. |
-| 🚀 **Orbitron Startup** | Instant-load splash screen with background data hydration. |
+## 🔧 v4.7.0 Release Notes
+- **Fixed XIRR Logic**: Moved from lump-sum CAGR to cash-flow-aware XIRR using synthetic monthly interpolation.
+- **Fixed Data Loss**: Resolved a critical bug where NPS data wasn't being preloaded from disk on startup.
+- **Added Safety Layer**: Mandatory confirmations added to all delete buttons to prevent accidental state wipes.
+- **NPS PDF Parser (Manual)**: Extracted and verified 183 historical contributions from PDF statement for legacy tracking.
