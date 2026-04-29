@@ -323,6 +323,10 @@ function AppInner() {
     const saved = getItemSync('pm_nps');
     return saved ? JSON.parse(saved) : [];
   });
+  const [goldHoldings,setGoldHoldings]=useState(() => {
+    const saved = getItemSync('pm_gold');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [npsGrowth,setNpsGrowth]=useState(() => {
     const saved = getItemSync('pm_nps_growth');
     return saved ? parseFloat(saved) : 7;
@@ -395,6 +399,10 @@ function AppInner() {
       });
       // NPS Settings
       csvLines.push(`NPS_SETTING,Growth/Step-up,${npsGrowth},,`);
+      // Gold Holdings
+      goldHoldings.forEach(h => {
+        csvLines.push(`GOLD_HOLDING,${h.date},${h.grams},${h.invVal},${h.note||''}`);
+      });
       
       const csv = csvLines.join('\n');
       const filename = `Portfolio_AutoBackup_${new Date().toISOString().slice(0,10)}_${Date.now()}.csv`;
@@ -457,6 +465,7 @@ function AppInner() {
   useEffect(()=>{if(isLoaded)setItemSync('pm_nps',JSON.stringify(npsHoldings));},[npsHoldings,isLoaded]);
   useEffect(()=>{if(isLoaded)setItemSync('pm_nps_navs',JSON.stringify(navs));},[navs,isLoaded]);
   useEffect(()=>{if(isLoaded)setItemSync('pm_nps_growth',JSON.stringify(npsGrowth));},[npsGrowth,isLoaded]);
+  useEffect(()=>{if(isLoaded)setItemSync('pm_gold',JSON.stringify(goldHoldings));},[goldHoldings,isLoaded]);
   useEffect(()=>{if(window.electronAPI?.onUpdateAvailable)window.electronAPI.onUpdateAvailable(()=>setUpdateAvail(true));},[]);
   const fetchPrices=useCallback(async()=>{
     if(!holdings.length)return;setLoading(true);setError(null);const out={};
@@ -482,6 +491,18 @@ function AppInner() {
         }else out[h.symbol]=null;
       }catch{out[h.symbol]=null;}
     }));
+
+    // Fetch Live Gold Rate (GC=F is Gold Futures per Ounce)
+    try {
+      const gjson = await pFetch(`https://query1.finance.yahoo.com/v8/finance/chart/GC=F?interval=1d&range=1d`);
+      const gmeta = gjson?.chart?.result?.[0]?.meta;
+      if(gmeta?.regularMarketPrice) {
+        // 1 Troy Ounce = 31.1035 grams
+        const pricePerGramUsd = gmeta.regularMarketPrice / 31.1035;
+        const pricePerGramInr = pricePerGramUsd * (usdInr || 83.5);
+        out['PHYSICAL_GOLD'] = { current: pricePerGramInr, currency: 'INR' };
+      }
+    } catch(e) { console.error("Gold fetch error", e); }
 
     setPrices(prev=>{
       const merged={...prev};
@@ -532,8 +553,14 @@ function AppInner() {
     },0);
     const npsInv = (npsHoldings||[]).reduce((a,h)=>a+(parseFloat(h.tInv)||0),0);
     
-    const finalInrVal = Math.round(totalInrVal + npsVal);
-    const finalInrInv = Math.round(totalInrInv + npsInv);
+    // Add Gold values (including 3% GST as per user requirement for final value)
+    const goldPrice = prices['PHYSICAL_GOLD']?.current || 0;
+    const totalGoldGrams = (goldHoldings||[]).reduce((a,h)=>a+(parseFloat(h.grams)||0),0);
+    const goldVal = Math.round(totalGoldGrams * goldPrice * 1.03); // +3% GST
+    const goldInv = (goldHoldings||[]).reduce((a,h)=>a+(parseFloat(h.invVal)||0),0);
+
+    const finalInrVal = Math.round(totalInrVal + npsVal + goldVal);
+    const finalInrInv = Math.round(totalInrInv + npsInv + goldInv);
     const today = new Date().toISOString().slice(0,10);
 
     setHistory(prev => {
@@ -541,9 +568,9 @@ function AppInner() {
       if(existing) {
         const diff = Math.abs(existing.inrVal - finalInrVal) / Math.max(existing.inrVal, 1);
         if(diff < 0.0005) return prev; // 0.05% threshold
-        return prev.map(p => p.date === today ? { ...p, inrVal: finalInrVal, inrInv: finalInrInv, npsVal: Math.round(npsVal), portfolioVal: Math.round(totalInrVal), usdVal: Math.round(totalUsdVal), usdInv: Math.round(totalUsdInv) } : p);
+        return prev.map(p => p.date === today ? { ...p, inrVal: finalInrVal, inrInv: finalInrInv, npsVal: Math.round(npsVal), goldVal: Math.round(goldVal), portfolioVal: Math.round(totalInrVal), usdVal: Math.round(totalUsdVal), usdInv: Math.round(totalUsdInv) } : p);
       }
-      return [...prev, { date: today, inrVal: finalInrVal, inrInv: finalInrInv, npsVal: Math.round(npsVal), portfolioVal: Math.round(totalInrVal), usdVal: Math.round(totalUsdVal), usdInv: Math.round(totalUsdInv) }].slice(-365);
+      return [...prev, { date: today, inrVal: finalInrVal, inrInv: finalInrInv, npsVal: Math.round(npsVal), goldVal: Math.round(goldVal), portfolioVal: Math.round(totalInrVal), usdVal: Math.round(totalUsdVal), usdInv: Math.round(totalUsdInv) }].slice(-365);
     });
   }, [prices, npsHoldings, navs, usdInr, portfolios, isLoaded]);
   useEffect(()=>{
@@ -754,6 +781,7 @@ Respond ONLY as a JSON object with these keys:
     {id:'IN',  label:'Indian Equity', icon:<Ic.India/>, flag:'🇮🇳', color:T.inColor},
     {id:'US',  label:'US Equity',     icon:<Ic.US/>,    flag:'🇺🇸', color:T.usColor},
     {id:'NPS', label:'NPS Portfolio', icon:'🛡️',       flag:'🛡️', color:T.accent},
+    {id:'GOLD',label:'Physical Gold', icon:'🟡',       flag:'🟡', color:'#FFD700'},
   ];
   const MOD_NAV=[
     {id:'watchlist', label:'Watchlist',  icon:'👁', color:'#a855f7'},
@@ -797,7 +825,7 @@ Respond ONLY as a JSON object with these keys:
           </div>
           <div>
             <div style={{fontSize:14,fontWeight:700,color:T.text,letterSpacing:'-.01em'}}>Portfolio Manager</div>
-            <div style={{fontSize:10,color:T.text3,marginTop:1}}>Arun Verma · v4.8.3</div>
+            <div style={{fontSize:10,color:T.text3,marginTop:1}}>Arun Verma · v4.9.0</div>
           </div>
         </div>
 
@@ -893,7 +921,7 @@ Respond ONLY as a JSON object with these keys:
             <button onClick={()=>setShowSettings(v=>!v)} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:6,background:showSettings?T.accentBg:'transparent',border:'none',cursor:'pointer',width:'100%',color:showSettings?T.accent:T.text3,transition:'all .15s',fontSize:12}}>
               <Ic.Settings/> Settings
             </button>
-            <div style={{fontSize:9,color:T.text3,textAlign:'center',marginTop:8,letterSpacing:'.05em',opacity:0.6}}>VERSION 4.8.3</div>
+            <div style={{fontSize:9,color:T.text3,textAlign:'center',marginTop:8,letterSpacing:'.05em',opacity:0.6}}>VERSION 4.9.0</div>
             </div>
           </div>
         </div>
@@ -921,6 +949,7 @@ Respond ONLY as a JSON object with these keys:
                   {mainTab==='IN'&&<Section title="Indian Equity" flag="🇮🇳" accent={T.inColor} rows={inRows} currency="INR" onImportCSV={()=>setImportModal('IN')} onRowClick={openStockTab} {...sharedProps}/>}
                   {mainTab==='US'&&<Section title="US Equity" flag="🇺🇸" accent={T.usColor} rows={usRows} currency="USD" usdInr={usdInr} onImportCSV={()=>setImportModal('US')} onRowClick={openStockTab} {...sharedProps}/>}
                   {mainTab==='NPS'&&<Suspense fallback={<div style={{padding:40,color:T.text3}}>Loading NPS...</div>}><NPSModule T={T} holdings={npsHoldings} setHoldings={setNpsHoldings} navs={navs} setNavs={setNavs} growth={npsGrowth} setGrowth={setNpsGrowth} onClose={()=>setMainTab('IN')}/></Suspense>}
+                  {mainTab==='GOLD'&&<Suspense fallback={<div style={{padding:40,color:T.text3}}>Loading Gold...</div>}><GoldModule T={T} holdings={goldHoldings} setHoldings={setGoldHoldings} prices={prices} onClose={()=>setMainTab('IN')}/></Suspense>}
                 </div>
                 <div className="right-sidebar" style={{overflowY:'auto',padding:rightSidebarCollapsed?0:'20px 16px 20px 0',borderLeft:rightSidebarCollapsed?'none':`1px solid ${T.border}`,opacity:rightSidebarCollapsed?0:1,transition:'opacity 0.2s'}}>
                   <div style={{padding:'0 0 0 16px'}}>

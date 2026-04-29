@@ -2190,4 +2190,143 @@ export function NPSModule({T,holdings,setHoldings,navs,setNavs,growth,setGrowth,
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── MODULE: PHYSICAL GOLD ──────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export function GoldModule({T,holdings,setHoldings,prices,onClose}) {
+  const [showAdd,setShowAdd]=useState(false);
+  const [form,setForm]=useState({grams:'',invVal:'',date:new Date().toISOString().split('T')[0],note:''});
+  
+  const goldPrice = prices['PHYSICAL_GOLD']?.current || 0;
+  const totalGrams = (holdings||[]).reduce((a,h)=>a+(parseFloat(h.grams)||0),0);
+  const totalInv = (holdings||[]).reduce((a,h)=>a+(parseFloat(h.invVal)||0),0);
+  
+  // Final value includes 3% GST as per user requirement
+  const currentValBase = totalGrams * goldPrice;
+  const currentValWithGst = Math.round(currentValBase * 1.03);
+  const totalGain = currentValWithGst - totalInv;
+  const gainPct = totalInv > 0 ? (totalGain/totalInv)*100 : 0;
+
+  const handleAdd = () => {
+    if(!form.grams || !form.invVal) return alert("Please enter weight and invoice value");
+    const newH = {
+      id: Date.now(),
+      grams: parseFloat(form.grams),
+      invVal: parseFloat(form.invVal),
+      date: form.date,
+      note: form.note
+    };
+    setHoldings(p => [...(p||[]), newH]);
+    setForm({grams:'',invVal:'',date:new Date().toISOString().split('T')[0],note:''});
+    setShowAdd(false);
+  };
+
+  const removeH = (id) => {
+    if(window.confirm("Remove this gold entry?")) {
+      setHoldings(p => p.filter(h=>h.id!==id));
+    }
+  };
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:24,animation:'fadeIn 0.3s ease-out'}}>
+      {/* Header */}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+        <div>
+          <div style={{fontSize:24,fontWeight:800,color:'#FFD700',letterSpacing:'-0.02em',marginBottom:4,display:'flex',alignItems:'center',gap:12}}>
+            <span>🟡 Physical Gold Portfolio</span>
+            <div style={{fontSize:10,background:'rgba(255,215,0,0.15)',color:'#FFD700',padding:'2px 8px',borderRadius:20,border:'1px solid rgba(255,215,0,0.3)',letterSpacing:'.05em'}}>24K TRACKER</div>
+          </div>
+          <div style={{fontSize:14,color:T.text3}}>Secure asset tracking with live global gold rates & 3% GST logic</div>
+        </div>
+        <div style={{display:'flex',gap:12,alignItems:'center'}}>
+          <div style={{display:'flex', alignItems:'center', gap:8, background:T.surface2, border:`1px solid ${T.border}`, borderRadius:8, padding:'4px 12px'}}>
+            <span style={{fontSize:11, fontWeight:700, color:T.text3, textTransform:'uppercase'}}>Live Rate (24K)</span>
+            <span style={{fontSize:13,fontWeight:800,color:'#FFD700'}}>₹{Math.round(goldPrice).toLocaleString('en-IN')}/g</span>
+          </div>
+          <button onClick={()=>setShowAdd(!showAdd)} style={{background:'#FFD700',color:'#000',border:'none',padding:'8px 16px',borderRadius:8,fontWeight:700,cursor:'pointer',display:'flex',alignItems:'center',gap:8,transition:'all .1s'}} onMouseEnter={e=>e.currentTarget.style.transform='scale(1.02)'} onMouseLeave={e=>e.currentTarget.style.transform='scale(1)'}>Add Gold Purchase</button>
+          {onClose&&<button onClick={onClose} style={{background:'none',border:`1px solid ${T.border}`,borderRadius:8,cursor:'pointer',color:T.text3,padding:'8px',display:'flex'}} onMouseEnter={e=>{e.currentTarget.style.borderColor=T.accent;e.currentTarget.style.color=T.accent;}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.text3;}}>X</button>}
+        </div>
+      </div>
+
+      {/* Summary Cards */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:16}}>
+        {[
+          {l:'Total Weight', v:totalGrams.toFixed(3)+' g', c:T.text},
+          {l:'Initial (Invested)', v:totalInv.toLocaleString('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}), c:T.text},
+          {l:'Current Value (+3% GST)', v:currentValWithGst.toLocaleString('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}), c:'#FFD700'},
+          {l:'Total P&L', v:`${totalGain>=0?'+':'−'}${Math.abs(totalGain).toLocaleString('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0})} (${gainPct.toFixed(2)}%)`, c:totalGain>=0?T.success:T.danger}
+        ].map((m,i)=>(
+          <div key={i} style={{background:T.surface2,border:`1px solid ${T.border}`,borderRadius:12,padding:'16px 20px',display:'flex',flexDirection:'column',gap:4,boxShadow:m.c==='#FFD700'?`0 0 20px ${m.c}10`:''}}>
+            <div style={{fontSize:11,color:T.text3,fontWeight:700,textTransform:'uppercase',letterSpacing:'.05em'}}>{m.l}</div>
+            <div style={{fontSize:22,fontWeight:800,color:m.c}}>{m.v}</div>
+          </div>
+        ))}
+      </div>
+
+      {showAdd && (
+        <div style={{background:T.surface2,border:`1px solid ${T.border}`,borderRadius:12,padding:24,display:'flex',flexDirection:'column',gap:20,boxShadow:'0 12px 32px rgba(0,0,0,.2)'}}>
+          <div style={{fontSize:15,fontWeight:700,color:T.text}}>New Gold Purchase / Entry</div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:16}}>
+            <div style={{display:'flex',flexDirection:'column',gap:6}}>
+              <label style={{fontSize:11,fontWeight:700,color:T.text3,textTransform:'uppercase'}}>Weight (Grams)</label>
+              <input type="number" step="0.001" value={form.grams} onChange={e=>setForm(p=>({...p,grams:e.target.value}))} placeholder="0.000" style={{background:T.surface3,border:`1px solid ${T.border}`,borderRadius:8,padding:'10px 12px',color:T.text,fontSize:14}}/>
+            </div>
+            <div style={{display:'flex',flexDirection:'column',gap:6}}>
+              <label style={{fontSize:11,fontWeight:700,color:T.text3,textTransform:'uppercase'}}>Invoice Value (Total Paid)</label>
+              <input type="number" value={form.invVal} onChange={e=>setForm(p=>({...p,invVal:e.target.value}))} placeholder="₹ 0.00" style={{background:T.surface3,border:`1px solid ${T.border}`,borderRadius:8,padding:'10px 12px',color:T.text,fontSize:14}}/>
+            </div>
+            <div style={{display:'flex',flexDirection:'column',gap:6}}>
+              <label style={{fontSize:11,fontWeight:700,color:T.text3,textTransform:'uppercase'}}>Purchase Date</label>
+              <input type="date" value={form.date} onChange={e=>setForm(p=>({...p,date:e.target.value}))} style={{background:T.surface3,border:`1px solid ${T.border}`,borderRadius:8,padding:'10px 12px',color:T.text,fontSize:14}}/>
+            </div>
+          </div>
+          <div style={{display:'flex',flexDirection:'column',gap:6}}>
+            <label style={{fontSize:11,fontWeight:700,color:T.text3,textTransform:'uppercase'}}>Note / Description</label>
+            <input type="text" value={form.note} onChange={e=>setForm(p=>({...p,note:e.target.value}))} placeholder="e.g. 24K Coin from Tanishq" style={{background:T.surface3,border:`1px solid ${T.border}`,borderRadius:8,padding:'10px 12px',color:T.text,fontSize:14}}/>
+          </div>
+          <div style={{display:'flex',gap:12}}>
+            <button onClick={handleAdd} style={{background:'#FFD700',color:'#000',border:'none',padding:'10px 20px',borderRadius:8,fontWeight:700,cursor:'pointer'}}>Save Entry</button>
+            <button onClick={()=>setShowAdd(false)} style={{background:'none',border:`1px solid ${T.border}`,color:T.text3,padding:'10px 20px',borderRadius:8,cursor:'pointer'}}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Entries Table */}
+      <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,overflow:'hidden'}}>
+        <table style={{width:'100%',borderCollapse:'collapse'}}>
+          <thead>
+            <tr style={{background:T.surface2,borderBottom:`1px solid ${T.border}`}}>
+              {['Date','Weight (g)','Invested (Inv)','Current Value','P&L','Note',''].map(h=>(
+                <th key={h} style={{padding:'12px 16px',textAlign:'left',fontSize:11,color:T.text3,fontWeight:700,textTransform:'uppercase'}}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {(holdings||[]).length===0?(
+              <tr><td colSpan="7" style={{padding:'40px',textAlign:'center',color:T.text3,fontSize:14}}>No gold entries found. Add your first purchase above.</td></tr>
+            ):(holdings||[]).sort((a,b)=>new Date(b.date)-new Date(a.date)).map(h=>{
+              const cv = Math.round(h.grams * goldPrice * 1.03);
+              const gain = cv - h.invVal;
+              return (
+                <tr key={h.id} style={{borderBottom:`1px solid ${T.border}`,transition:'background .1s'}} onMouseEnter={e=>e.currentTarget.style.background=T.surface2} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                  <td style={{padding:'14px 16px',fontSize:13,color:T.text2}}>{new Date(h.date).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}</td>
+                  <td style={{padding:'14px 16px',fontSize:13,fontWeight:600}}>{h.grams.toFixed(3)}</td>
+                  <td style={{padding:'14px 16px',fontSize:13}}>{h.invVal.toLocaleString('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0})}</td>
+                  <td style={{padding:'14px 16px',fontSize:13,color:'#FFD700',fontWeight:700}}>{cv.toLocaleString('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0})}</td>
+                  <td style={{padding:'14px 16px',fontSize:13,color:gain>=0?T.success:T.danger,fontWeight:600}}>{gain>=0?'+':'−'}{Math.abs(gain).toLocaleString('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0})}</td>
+                  <td style={{padding:'14px 16px',fontSize:13,color:T.text3}}>{h.note || '-'}</td>
+                  <td style={{padding:'14px 16px',textAlign:'right'}}>
+                    <button onClick={()=>removeH(h.id)} style={{background:'none',border:'none',color:T.text3,cursor:'pointer'}} onMouseEnter={e=>e.currentTarget.style.color=T.danger} onMouseLeave={e=>e.currentTarget.style.color=T.text3}>X</button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ── MAIN APP ──────────────────────────────────────────────────────────────────
