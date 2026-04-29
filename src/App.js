@@ -376,7 +376,7 @@ function AppInner() {
 
   const handleFinalExit = async (saveBackup) => {
     if (saveBackup) {
-      const csvLines = ["Type,Portfolio/Symbol,Name,Qty/T1,BuyPrice/T2"];
+      const csvLines = ["Type,Category/Symbol,Item/Name,Value1,Value2,Value3"];
       // Holdings
       portfolios.forEach(p => {
         p.holdings.forEach(h => {
@@ -389,6 +389,12 @@ function AppInner() {
         const n = a.name.includes(',') ? `"${a.name}"` : a.name;
         csvLines.push(`ALERT,${a.symbol},${n},${a.t1},${a.t2||''}`);
       });
+      // NPS Holdings
+      npsHoldings.forEach(h => {
+        csvLines.push(`NPS_HOLDING,${h.pfm},E:${h.e}|C:${h.c}|G:${h.g},${h.tInv},${h.sDate}`);
+      });
+      // NPS Settings
+      csvLines.push(`NPS_SETTING,Growth/Step-up,${npsGrowth},,`);
       
       const csv = csvLines.join('\n');
       const filename = `Portfolio_AutoBackup_${new Date().toISOString().slice(0,10)}_${Date.now()}.csv`;
@@ -791,7 +797,7 @@ Respond ONLY as a JSON object with these keys:
           </div>
           <div>
             <div style={{fontSize:14,fontWeight:700,color:T.text,letterSpacing:'-.01em'}}>Portfolio Manager</div>
-            <div style={{fontSize:10,color:T.text3,marginTop:1}}>Arun Verma · v4.6.9</div>
+            <div style={{fontSize:10,color:T.text3,marginTop:1}}>Arun Verma · v4.8.3</div>
           </div>
         </div>
 
@@ -887,7 +893,7 @@ Respond ONLY as a JSON object with these keys:
             <button onClick={()=>setShowSettings(v=>!v)} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:6,background:showSettings?T.accentBg:'transparent',border:'none',cursor:'pointer',width:'100%',color:showSettings?T.accent:T.text3,transition:'all .15s',fontSize:12}}>
               <Ic.Settings/> Settings
             </button>
-            <div style={{fontSize:9,color:T.text3,textAlign:'center',marginTop:8,letterSpacing:'.05em',opacity:0.6}}>VERSION 4.8.2</div>
+            <div style={{fontSize:9,color:T.text3,textAlign:'center',marginTop:8,letterSpacing:'.05em',opacity:0.6}}>VERSION 4.8.3</div>
             </div>
           </div>
         </div>
