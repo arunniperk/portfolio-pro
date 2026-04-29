@@ -275,69 +275,64 @@ function AppInner() {
   const [isLoaded,setIsLoaded]=useState(false);
   const [isLocked,setIsLocked]=useState(false);
   const [pinInput,setPinInput]=useState('');
-  const [tweaks,setTweaks]=useState(TWEAK_DEF);
-  const [portfolios,setPortfolios]=useState(DEF_PF);
-  const [activeId,setActiveId]=useState(1);
-  const [sidebarCollapsed,setSidebarCollapsed]=useState(false);
-  const [rightSidebarCollapsed,setRightSidebarCollapsed]=useState(false);
-  const [groqKey,setGroqKey]=useState('');
-  const [geminiKey,setGeminiKey]=useState('');
-  const [primaryAI,setPrimaryAI]=useState('groq');
-  const [history,setHistory]=useState([]);
-  const [navs,setNavs]=useState({
-    'SBI_E': 48.25, 'SBI_C': 32.10, 'SBI_G': 28.45,
-    'HDFC_E': 52.12, 'HDFC_C': 34.50, 'HDFC_G': 30.15,
-    'ICICI_E': 50.80, 'ICICI_C': 33.20, 'ICICI_G': 29.40,
-    'LIC_E': 42.15, 'LIC_C': 31.05, 'LIC_G': 27.90,
-    'UTI_E': 70.4812, 'UTI_C': 40.3962, 'UTI_G': 36.6234
+  const [tweaks,setTweaks]=useState(() => {
+    const saved = getItemSync('pm_tweaks');
+    return saved ? {...TWEAK_DEF, ...JSON.parse(saved)} : TWEAK_DEF;
   });
-  const [alerts,setAlerts]=useState([]);
-  const [npsHoldings,setNpsHoldings]=useState([]);
-  const [npsGrowth,setNpsGrowth]=useState(7);
+  const [portfolios,setPortfolios]=useState(() => {
+    const saved = getItemSync('pm_portfolios');
+    return saved ? JSON.parse(saved) : DEF_PF;
+  });
+  const [activeId,setActiveId]=useState(() => {
+    const saved = getItemSync('pm_activeId');
+    return saved ? JSON.parse(saved) : 1;
+  });
+  const [sidebarCollapsed,setSidebarCollapsed]=useState(() => JSON.parse(getItemSync('pm_sidebar_collapsed') || 'false'));
+  const [rightSidebarCollapsed,setRightSidebarCollapsed]=useState(() => JSON.parse(getItemSync('pm_right_sidebar_collapsed') || 'false'));
+  const [groqKey,setGroqKey]=useState(() => getItemSync('pm_groq_key') || '');
+  const [geminiKey,setGeminiKey]=useState(() => getItemSync('pm_gemini_key') || '');
+  const [primaryAI,setPrimaryAI]=useState(() => getItemSync('pm_primary_ai') || 'groq');
+  const [history,setHistory]=useState(() => {
+    const raw = JSON.parse(getItemSync('pm_portfolio_history') || '[]');
+    return raw.slice(-365);
+  });
+  const [navs,setNavs]=useState(() => {
+    const saved = getItemSync('pm_nps_navs');
+    if(saved) return JSON.parse(saved);
+    return {
+      'SBI_E': 48.25, 'SBI_C': 32.10, 'SBI_G': 28.45,
+      'HDFC_E': 52.12, 'HDFC_C': 34.50, 'HDFC_G': 30.15,
+      'ICICI_E': 50.80, 'ICICI_C': 33.20, 'ICICI_G': 29.40,
+      'LIC_E': 42.15, 'LIC_C': 31.05, 'LIC_G': 27.90,
+      'UTI_E': 70.4812, 'UTI_C': 40.3962, 'UTI_G': 36.6234
+    };
+  });
+  const [alerts,setAlerts]=useState(() => {
+    const raw = JSON.parse(getItemSync('pm_alerts') || '[]');
+    return raw.map(a => ({
+      ...a,
+      t1: a.t1 ?? a.price ?? 0,
+      t1Hit: a.t1Hit ?? a.triggered ?? false,
+      t1HitAt: a.t1HitAt ?? a.triggeredAt ?? null,
+      t2: a.t2 ?? null,
+      t2Hit: a.t2Hit ?? false,
+      t2HitAt: a.t2HitAt ?? null
+    }));
+  });
+  const [npsHoldings,setNpsHoldings]=useState(() => {
+    const saved = getItemSync('pm_nps');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [npsGrowth,setNpsGrowth]=useState(() => {
+    const saved = getItemSync('pm_nps_growth');
+    return saved ? parseFloat(saved) : 7;
+  });
 
   useEffect(() => {
     // Run after initial mount to keep the UI thread responsive
     setTimeout(() => {
       try {
-        const sTwk=getItemSync('pm_tweaks');
-        if(sTwk){
-          const t = JSON.parse(sTwk);
-          setTweaks({...TWEAK_DEF, ...t});
-          if(t.pin) setIsLocked(true);
-        }
-        
-        const sPfs = getItemSync('pm_portfolios');
-        if(sPfs) setPortfolios(JSON.parse(sPfs));
-        
-        const sNps = getItemSync('pm_nps');
-        if(sNps) setNpsHoldings(JSON.parse(sNps));
-        
-        const sGrowth = getItemSync('pm_nps_growth');
-        if(sGrowth) setNpsGrowth(parseFloat(sGrowth));
-
-        const sActive = getItemSync('pm_activeId');
-        if(sActive) setActiveId(JSON.parse(sActive));
-        
-        setSidebarCollapsed(JSON.parse(getItemSync('pm_sidebar_collapsed') || 'false'));
-        setRightSidebarCollapsed(JSON.parse(getItemSync('pm_right_sidebar_collapsed') || 'false'));
-        setGroqKey(getItemSync('pm_groq_key') || '');
-        setGeminiKey(getItemSync('pm_gemini_key') || '');
-        setPrimaryAI(getItemSync('pm_primary_ai') || 'groq');
-        const todayStr = new Date().toISOString().slice(0, 10);
-        const rawHistory = JSON.parse(getItemSync('pm_portfolio_history') || '[]');
-        setHistory(rawHistory.slice(-365));
-        const sNavs = getItemSync('pm_nps_navs');
-        if(sNavs) setNavs(JSON.parse(sNavs));
-        const rawAlerts = JSON.parse(getItemSync('pm_alerts') || '[]');
-        setAlerts(rawAlerts.map(a => ({
-          ...a,
-          t1: a.t1 ?? a.price ?? 0,
-          t1Hit: a.t1Hit ?? a.triggered ?? false,
-          t1HitAt: a.t1HitAt ?? a.triggeredAt ?? null,
-          t2: a.t2 ?? null,
-          t2Hit: a.t2Hit ?? false,
-          t2HitAt: a.t2HitAt ?? null
-        })));
+        if(tweaks.pin) setIsLocked(true);
         
         const gKey = getItemSync('pm_groq_key');
         const gmKey = getItemSync('pm_gemini_key');
@@ -892,7 +887,7 @@ Respond ONLY as a JSON object with these keys:
             <button onClick={()=>setShowSettings(v=>!v)} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:6,background:showSettings?T.accentBg:'transparent',border:'none',cursor:'pointer',width:'100%',color:showSettings?T.accent:T.text3,transition:'all .15s',fontSize:12}}>
               <Ic.Settings/> Settings
             </button>
-            <div style={{fontSize:9,color:T.text3,textAlign:'center',marginTop:8,letterSpacing:'.05em',opacity:0.6}}>VERSION 4.8.0</div>
+            <div style={{fontSize:9,color:T.text3,textAlign:'center',marginTop:8,letterSpacing:'.05em',opacity:0.6}}>VERSION 4.8.1</div>
             </div>
           </div>
         </div>
