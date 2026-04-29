@@ -1,6 +1,6 @@
-# Portfolio Manager Pro (v4.8.0)
+# Portfolio Manager Pro (v4.9.2)
 
-A high-performance **Windows 11 desktop application** for managing a comprehensive personal portfolio including Indian Equity, US Equity, and **National Pension System (NPS)**. 
+A high-performance **Windows 11 desktop application** for managing a comprehensive personal portfolio including Indian Equity, US Equity, **National Pension System (NPS)**, and **Physical Gold**. 
 
 Built with **React 18 + Vite + Electron** — Featuring an NVIDIA-inspired "Orbitron" dark UI, high-precision XIRR engine, and automated financial tracking.
 
@@ -8,21 +8,20 @@ Built with **React 18 + Vite + Electron** — Featuring an NVIDIA-inspired "Orbi
 
 ## 🚀 Key Features
 
+### 🟡 Physical Gold Asset Tracker (v4.9.0 - v4.9.2)
+- **Live 24K Valuation** — Real-time price tracking using **GoldAPI.io** (with Yahoo Finance fallback) for high-accuracy Indian market rates.
+- **GST Integrated Logic** — Automatically applies the mandatory **3% GST** to live base prices to provide a realistic "Sale Value" estimation.
+- **Historical Purchases** — Track weight in grams, invoice values, and acquisition dates with automatic P&L calculation.
+- **Unified Backup** — Gold holdings are automatically included in the daily CSV auto-backup routine.
+
 ### 🛡️ NPS Portfolio Monitor (v4.8.0)
 - **Precision XIRR Engine** — Robust **Newton-Raphson XIRR solver** that models monthly cash flows and withdrawals.
 - **Persistent Calibration** — User-controlled "Step-up %" settings are now saved across sessions for consistent XIRR alignment with official NPS data.
 - **Unified Value Breakdown** — Clear separation of **Stocks Value** vs. **NPS Value** in historical tracking for full portfolio transparency.
-- **Historical Analysis** — Extracted and integrated 13+ years of historical contribution data for verified 0.1% accuracy.
 
-### 📈 Smart History Tracking (v4.8.0)
-- **Background Snapshots** — Automated daily snapshots of total portfolio wealth (Equity + NPS) are saved whenever prices refresh, ensuring no data gaps.
+### 📈 Smart History Tracking (v4.9.1)
+- **Background Snapshots** — Automated daily snapshots of total portfolio wealth (Equity + NPS + Gold) are saved whenever prices refresh.
 - **Detailed Analytics** — Interactive SVG charts with daily change tracking (₹ and $) and since-start gain/loss reporting.
-- **Multicurrency Support** — Seamlessly combines INR and USD holdings into a single, unified historical curve using live FX rates.
-
-### 🔒 Data Safety & Integrity
-- **Mandatory Deletion Checks** — Application-wide `window.confirm` dialogs for every data-destructive action.
-- **Redundant Persistence** — Write-through caching to `Documents\Portfolio` ensures 0% data loss across restarts.
-- **Auto-Backups** — CSV exports on exit containing full holdings, alerts, and transaction history.
 
 ---
 
@@ -31,9 +30,9 @@ Built with **React 18 + Vite + Electron** — Featuring an NVIDIA-inspired "Orbi
 | Tool | Description |
 |---|---|
 | 🛡️ **NPS** | **High-precision XIRR tracking** with persistent Step-up calibration and asset allocation (E, C, G). |
-| 📈 **History** | **Background daily snapshots** with detailed Stocks vs. NPS value breakdown. |
+| 🟡 **Gold** | **Physical Asset Tracking** with 24K live rates, 3% GST logic, and acquisition cost monitoring. |
+| 📈 **History** | **Background daily snapshots** with detailed Stocks vs. NPS vs. Gold value breakdown. |
 | 👁 **Watchlist** | Track stocks with target entry/exit prices and "Near Entry" alerts. |
-| 🔔 **Alerts** | Market-segregated price triggers with sorting and historical hit tracking. |
 | 📊 **Benchmark** | Real-time performance comparison vs **Nifty 50** and **S&P 500**. |
 
 ---
@@ -42,15 +41,14 @@ Built with **React 18 + Vite + Electron** — Featuring an NVIDIA-inspired "Orbi
 
 | | |
 |---|---|
-| Version | 4.8.0 |
+| Version | 4.9.2 |
 | Author | Arun Verma |
 | Repository | Private / Personal |
 | Platform | Windows 10/11 (64-bit) |
 
 ---
 
-## 🔧 v4.8.0 Release Notes
-- **Major History Refactor**: Implemented automated background snapshots; no more manual saving required.
-- **NPS Transparency**: Added separate value tracking for NPS within the History module.
-- **Persistent Settings**: Lifted and persisted XIRR calibration (Step-up %) and NAV data.
-- **Stable State Engine**: Resolved critical crashes related to prop synchronization and state lifting.
+## 🔧 Release Notes (v4.9.0 - v4.9.2)
+- **v4.9.2**: **GoldAPI.io Integration**. Added support for premium gold price data and improved fallback to XAUINR=X for accurate Indian valuations.
+- **v4.9.1**: **Stability Patch**. Fixed ReferenceError for GoldModule lazy-loading and added Gold to mobile BottomNav.
+- **v4.9.0**: **Gold Module Launch**. Introduced physical gold tracking with GST logic and daily backup integration.

@@ -65,7 +65,7 @@ import { AIAnalysis } from './components/AIAnalysis';
 
 // ── HOLDINGS TABLE ────────────────────────────────────────────────────────────
 import { Section } from './components/Section';
-function SettingsPanel({tweaks,onUpdate,onClose,groqKey,geminiKey,primaryAI,onSaveAIKeys,T}) {
+function SettingsPanel({tweaks,onUpdate,onClose,groqKey,geminiKey,primaryAI,onSaveAIKeys,goldApiKey,setGoldApiKey,T}) {
   const [editing,setEditing]=useState(null);
   const [newKey,setNewKey]=useState('');
   const [testing,setTesting]=useState(false);
@@ -149,7 +149,22 @@ function SettingsPanel({tweaks,onUpdate,onClose,groqKey,geminiKey,primaryAI,onSa
                 </div>
               );
             })}
-            {groqKey&&geminiKey&&<div style={{fontSize:11,color:T.text3}}>Both configured — <b style={{color:T.text}}>{primaryAI==='groq'?'Groq':'Gemini'}</b> is primary with auto-fallback.</div>}
+          </div>
+
+          <div style={{borderTop:`1px solid ${T.border}`,paddingTop:14}}>
+            <div style={{fontSize:11,fontWeight:700,color:T.text3,textTransform:'uppercase',letterSpacing:'.06em',marginBottom:10}}>Gold Data Provider</div>
+            <div style={{background:T.surface3,borderRadius:8,border:`1px solid ${T.border}`,padding:'10px 12px'}}>
+              <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+                <div style={{width:24,height:24,borderRadius:5,background:'linear-gradient(135deg,#FFD700,#b8860b)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12}}>🟡</div>
+                <span style={{fontSize:12,fontWeight:700,color:T.text,flex:1}}>GoldAPI.io</span>
+                {goldApiKey?<span style={{fontSize:9,background:T.successBg,color:T.success,padding:'2px 6px',borderRadius:8,fontWeight:700}}>Active</span>:<span style={{fontSize:9,background:T.surface4,color:T.text3,padding:'2px 6px',borderRadius:8}}>Fallback (Yahoo)</span>}
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:7}}>
+                <NvInput value={goldApiKey} onChange={e=>setGoldApiKey(e.target.value)} placeholder="Enter GoldAPI.io Key" T={T} style={{fontFamily:'monospace',fontSize:11}}/>
+                <div style={{fontSize:10,color:T.text3}}>Get a free key at <a href="https://goldapi.io" target="_blank" style={{color:T.accent}}>goldapi.io</a> for better Indian rates.</div>
+              </div>
+            </div>
+            {groqKey&&geminiKey&&<div style={{fontSize:11,color:T.text3,marginTop:12}}>Both configured — <b style={{color:T.text}}>{primaryAI==='groq'?'Groq':'Gemini'}</b> is primary with auto-fallback.</div>}
           </div>
           <div style={{borderTop:`1px solid ${T.border}`,paddingTop:14}}>
             <div style={{fontSize:11,fontWeight:700,color:T.text3,textTransform:'uppercase',letterSpacing:'.06em',marginBottom:10}}>Privacy & Security</div>
@@ -294,6 +309,7 @@ function AppInner() {
   const [groqKey,setGroqKey]=useState(() => getItemSync('pm_groq_key') || '');
   const [geminiKey,setGeminiKey]=useState(() => getItemSync('pm_gemini_key') || '');
   const [primaryAI,setPrimaryAI]=useState(() => getItemSync('pm_primary_ai') || 'groq');
+  const [goldApiKey,setGoldApiKey]=useState(() => getItemSync('pm_gold_api_key') || '');
   const [history,setHistory]=useState(() => {
     const raw = JSON.parse(getItemSync('pm_portfolio_history') || '[]');
     return raw.slice(-365);
@@ -468,6 +484,7 @@ function AppInner() {
   useEffect(()=>{if(isLoaded)setItemSync('pm_nps_navs',JSON.stringify(navs));},[navs,isLoaded]);
   useEffect(()=>{if(isLoaded)setItemSync('pm_nps_growth',JSON.stringify(npsGrowth));},[npsGrowth,isLoaded]);
   useEffect(()=>{if(isLoaded)setItemSync('pm_gold',JSON.stringify(goldHoldings));},[goldHoldings,isLoaded]);
+  useEffect(()=>{if(isLoaded)setItemSync('pm_gold_api_key',goldApiKey);},[goldApiKey,isLoaded]);
   useEffect(()=>{if(window.electronAPI?.onUpdateAvailable)window.electronAPI.onUpdateAvailable(()=>setUpdateAvail(true));},[]);
   const fetchPrices=useCallback(async()=>{
     if(!holdings.length)return;setLoading(true);setError(null);const out={};
@@ -494,15 +511,24 @@ function AppInner() {
       }catch{out[h.symbol]=null;}
     }));
 
-    // Fetch Live Gold Rate (GC=F is Gold Futures per Ounce)
+    // Fetch Live Gold Rate
     try {
-      const gjson = await pFetch(`https://query1.finance.yahoo.com/v8/finance/chart/GC=F?interval=1d&range=1d`);
-      const gmeta = gjson?.chart?.result?.[0]?.meta;
-      if(gmeta?.regularMarketPrice) {
-        // 1 Troy Ounce = 31.1035 grams
-        const pricePerGramUsd = gmeta.regularMarketPrice / 31.1035;
-        const pricePerGramInr = pricePerGramUsd * (usdInr || 83.5);
-        out['PHYSICAL_GOLD'] = { current: pricePerGramInr, currency: 'INR' };
+      if(goldApiKey) {
+        // Use GoldAPI.io for premium accurate rates
+        const gapi = await pFetch(`https://www.goldapi.io/api/XAU/INR`, { headers: { 'x-access-token': goldApiKey } });
+        if(gapi?.price_gram_24k) {
+          out['PHYSICAL_GOLD'] = { current: gapi.price_gram_24k, currency: 'INR' };
+        }
+      }
+      
+      if(!out['PHYSICAL_GOLD']) {
+        // Fallback or No Key: Use Yahoo Finance XAUINR=X (Spot Gold in INR)
+        // XAUINR=X is per Troy Ounce
+        const gjson = await pFetch(`https://query1.finance.yahoo.com/v8/finance/chart/XAUINR%3DX?interval=1d&range=1d`);
+        const gmeta = gjson?.chart?.result?.[0]?.meta;
+        if(gmeta?.regularMarketPrice) {
+          out['PHYSICAL_GOLD'] = { current: gmeta.regularMarketPrice / 31.1035, currency: 'INR' };
+        }
       }
     } catch(e) { console.error("Gold fetch error", e); }
 
@@ -827,7 +853,7 @@ Respond ONLY as a JSON object with these keys:
           </div>
           <div>
             <div style={{fontSize:14,fontWeight:700,color:T.text,letterSpacing:'-.01em'}}>Portfolio Manager</div>
-            <div style={{fontSize:10,color:T.text3,marginTop:1}}>Arun Verma · v4.9.1</div>
+            <div style={{fontSize:10,color:T.text3,marginTop:1}}>Arun Verma · v4.9.2</div>
           </div>
         </div>
 
@@ -923,7 +949,7 @@ Respond ONLY as a JSON object with these keys:
             <button onClick={()=>setShowSettings(v=>!v)} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:6,background:showSettings?T.accentBg:'transparent',border:'none',cursor:'pointer',width:'100%',color:showSettings?T.accent:T.text3,transition:'all .15s',fontSize:12}}>
               <Ic.Settings/> Settings
             </button>
-            <div style={{fontSize:9,color:T.text3,textAlign:'center',marginTop:8,letterSpacing:'.05em',opacity:0.6}}>VERSION 4.9.1</div>
+            <div style={{fontSize:9,color:T.text3,textAlign:'center',marginTop:8,letterSpacing:'.05em',opacity:0.6}}>VERSION 4.9.2</div>
             </div>
           </div>
         </div>
@@ -966,7 +992,7 @@ Respond ONLY as a JSON object with these keys:
       </div>
 
       {showAISetup&&<AISetupModal onSave={saveAIKeys} T={T}/> }
-      {showSettings&&<SettingsPanel tweaks={tweaks} onUpdate={(k,v)=>setTweaks(p=>({...p,[k]:v}))} onClose={()=>setShowSettings(false)} groqKey={groqKey} geminiKey={geminiKey} primaryAI={primaryAI} onSaveAIKeys={saveAIKeys} T={T}/>}
+      {showSettings&&<SettingsPanel tweaks={tweaks} onUpdate={(k,v)=>setTweaks(p=>({...p,[k]:v}))} onClose={()=>setShowSettings(false)} groqKey={groqKey} geminiKey={geminiKey} primaryAI={primaryAI} onSaveAIKeys={saveAIKeys} goldApiKey={goldApiKey} setGoldApiKey={setGoldApiKey} T={T}/>}
       {importModal&&<CSVImportModal market={importModal} onImport={importHoldings} onClose={()=>setImportModal(null)} T={T}/>}
       {isMobile && <BottomNav activeId={mainTab} activeModule={activeModule} onSwitch={(id) => {if(id==='IN'||id==='US'){setMainTab(id);setActiveModule(null);}else{setActiveModule(id);}}} T={T} NAV={NAV} MOD_NAV={MOD_NAV}/>}
 

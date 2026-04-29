@@ -49,7 +49,7 @@ const KNOWN_KEYS = [
   'pm_groq_key', 'pm_gemini_key', 'pm_primary_ai',
   'pm_alerts', 'pm_sectors', 'pm_portfolio_history',
   'pm_watchlist', 'pm_lots', 'pm_sold_lots', 'pm_notes',
-  'pm_nps', 'pm_nps_navs', 'pm_nps_growth', 'pm_gold', 'pm_pin',
+  'pm_nps', 'pm_nps_navs', 'pm_nps_growth', 'pm_gold', 'pm_pin', 'pm_gold_api_key',
   'pm_sidebar_collapsed', 'pm_right_sidebar_collapsed',
 ];
 
