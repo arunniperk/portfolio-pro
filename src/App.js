@@ -240,6 +240,7 @@ function BottomNav({activeId, activeModule, onSwitch, T, NAV, MOD_NAV}) {
     {id: 'IN', label: 'Indian', icon: <Ic.India/>},
     {id: 'US', label: 'US', icon: <Ic.US/>},
     {id: 'NPS', label: 'NPS', icon: '🛡️'},
+    {id: 'GOLD', label: 'Gold', icon: '🟡'},
     {id: 'watchlist', label: 'Watch', icon: '👁'},
     {id: 'news', label: 'News', icon: '📰'},
     {id: 'alerts', label: 'Alerts', icon: '🔔'},
@@ -270,6 +271,7 @@ const HistoryModule   = lazy(() => import('./modules').then(m => ({ default: m.H
 const WatchlistModule = lazy(() => import('./modules').then(m => ({ default: m.WatchlistModule })));
 const WatchlistHistoryModule = lazy(() => import('./modules').then(m => ({ default: m.WatchlistHistoryModule })));
 const NPSModule       = lazy(() => import('./modules').then(m => ({ default: m.NPSModule })));
+const GoldModule      = lazy(() => import('./modules').then(m => ({ default: m.GoldModule })));
 
 function AppInner() {
   const [isLoaded,setIsLoaded]=useState(false);
@@ -825,7 +827,7 @@ Respond ONLY as a JSON object with these keys:
           </div>
           <div>
             <div style={{fontSize:14,fontWeight:700,color:T.text,letterSpacing:'-.01em'}}>Portfolio Manager</div>
-            <div style={{fontSize:10,color:T.text3,marginTop:1}}>Arun Verma · v4.9.0</div>
+            <div style={{fontSize:10,color:T.text3,marginTop:1}}>Arun Verma · v4.9.1</div>
           </div>
         </div>
 
@@ -921,7 +923,7 @@ Respond ONLY as a JSON object with these keys:
             <button onClick={()=>setShowSettings(v=>!v)} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:6,background:showSettings?T.accentBg:'transparent',border:'none',cursor:'pointer',width:'100%',color:showSettings?T.accent:T.text3,transition:'all .15s',fontSize:12}}>
               <Ic.Settings/> Settings
             </button>
-            <div style={{fontSize:9,color:T.text3,textAlign:'center',marginTop:8,letterSpacing:'.05em',opacity:0.6}}>VERSION 4.9.0</div>
+            <div style={{fontSize:9,color:T.text3,textAlign:'center',marginTop:8,letterSpacing:'.05em',opacity:0.6}}>VERSION 4.9.1</div>
             </div>
           </div>
         </div>
