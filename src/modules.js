@@ -1181,10 +1181,11 @@ export function HistoryModule({T,history,setHistory,onClose}) {
 
   const linePath=data.map((d,i)=>`${i===0?'M':'L'}${xOf(i).toFixed(1)},${yOf(d.inrVal).toFixed(1)}`).join(' ');
   const areaPath=linePath+` L${xOf(data.length-1).toFixed(1)},${PAD.t+H} L${PAD.l},${PAD.t+H} Z`;
-  const isUp=vals[vals.length-1]>=vals[0];
-  const lc=isUp?T.success:T.danger;
-  const gain=vals[vals.length-1]-vals[0];
-  const gainPct=(gain/vals[0])*100;
+  const latest = data[data.length-1];
+  const gain = latest.inrVal - (latest.inrInv || data[0].inrVal);
+  const gainPct = latest.inrInv > 0 ? (gain / latest.inrInv) * 100 : 0;
+  const isUp = gain >= 0;
+  const lc = isUp ? T.success : T.danger;
 
   return(
     <div style={{flex:1,overflowY:'auto',minHeight:0}}>
