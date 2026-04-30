@@ -1161,7 +1161,7 @@ export function NewsModule({T,holdings,onClose}) {
 export function HistoryModule({T,history,setHistory,onClose}) {
   const [hover,setHover]=useState(null);
 
-  const data=useMemo(()=>history.filter(h=>h.inrVal>0).sort((a,b)=>a.date.localeCompare(b.date)),[history]);
+  const data=useMemo(()=>history.filter(h=>h.inrVal>0 && h.date >= '2026-04-30').sort((a,b)=>a.date.localeCompare(b.date)),[history]);
 
   if(!data.length)return(
     <div style={{flex:1,overflowY:'auto',minHeight:0}}>
@@ -1173,8 +1173,17 @@ export function HistoryModule({T,history,setHistory,onClose}) {
   );
 
   const latest = data[data.length-1];
-  const gain = latest.inrVal - (latest.inrInv || data[0].inrVal);
-  const gainPct = latest.inrInv > 0 ? (gain / latest.inrInv) * 100 : 0;
+  
+  // Calculate gains as sum of individual asset gains (Labeled 1 in user screenshot)
+  const inGain = (latest.inrEquityVal||0) - (latest.inrEquityInv||0);
+  const usGain = Math.round((latest.usdEquityVal||0)*(latest.usdInr||83.5)) - Math.round((latest.usdEquityInv||0)*(latest.usdInr||83.5));
+  const npsGain = (latest.npsVal||0) - (latest.npsInv||0);
+  const goldGain = (latest.goldVal||0) - (latest.goldInv||0);
+  const gain = inGain + usGain + npsGain + goldGain;
+
+  // Calculate actual total investment (sum of individual asset investments)
+  const actualInv = (latest.inrEquityInv||0) + Math.round((latest.usdEquityInv||0)*(latest.usdInr||83.5)) + (latest.npsInv||0) + (latest.goldInv||0);
+  const gainPct = actualInv > 0 ? (gain / actualInv) * 100 : 0;
   const isUp = gain >= 0;
   const lc = isUp ? T.success : T.danger;
 
@@ -1240,7 +1249,7 @@ export function HistoryModule({T,history,setHistory,onClose}) {
                 })}
                 <tr style={{background:T.surface3,fontWeight:800}}>
                   <td style={{padding:'16px',fontSize:14,color:T.text}}>Total Portfolio</td>
-                  <td style={{padding:'16px',textAlign:'right',fontSize:15,color:T.text2}}>{fmt(latest.inrInv,'INR')}</td>
+                  <td style={{padding:'16px',textAlign:'right',fontSize:15,color:T.text2}}>{fmt(actualInv,'INR')}</td>
                   <td style={{padding:'16px',textAlign:'right',fontSize:15,color:T.accent}}>{fmt(latest.inrVal,'INR')}</td>
                   <td style={{padding:'16px',textAlign:'right',fontSize:15,color:gain>=0?T.success:T.danger}}>{gain>=0?'+':'−'}₹{Math.abs(gain).toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
                   <td style={{padding:'16px',textAlign:'right',fontSize:15,color:gain>=0?T.success:T.danger}}>{gainPct>=0?'+':''}{gainPct.toFixed(2)}%</td>
@@ -1259,22 +1268,24 @@ export function HistoryModule({T,history,setHistory,onClose}) {
             <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
               <thead style={{position:'sticky',top:0,zIndex:2}}>
                 <tr style={{background:T.surface3}}>
-                  {['Date','Total Value (₹)','Day Chg (₹)','Indian Equity','US Equity','NPS','Gold'].map(h=><th key={h} style={{padding:'12px 16px',textAlign:'right',color:T.text3,fontWeight:700,fontSize:10,textTransform:'uppercase',borderBottom:`1px solid ${T.border}`}}>{h}</th>)}
+                  {['Date','Initial Value (₹)','Total Value (₹)','Total P&L (₹)','Indian Equity','US Equity','NPS','Gold'].map(h=><th key={h} style={{padding:'12px 16px',textAlign:'right',color:T.text3,fontWeight:700,fontSize:10,textTransform:'uppercase',borderBottom:`1px solid ${T.border}`}}>{h}</th>)}
                 </tr>
               </thead>
               <tbody>{[...data].reverse().map((d,i)=>{
                 const prev=data[data.length-2-i];
-                const hasInv = d.inrInv > 0 && prev && prev.inrInv > 0;
-                const curPnl = d.inrInv > 0 ? d.inrVal - d.inrInv : d.inrVal;
-                const prevPnl = (prev && prev.inrInv > 0) ? prev.inrVal - prev.inrInv : (prev ? prev.inrVal : null);
-                const inrChg = (hasInv && prevPnl != null) ? (curPnl - prevPnl) : (prev ? d.inrVal - prev.inrVal : null);
+                const rInGain = (d.inrEquityVal||0) - (d.inrEquityInv||0);
+                const rUsGain = Math.round((d.usdEquityVal||0)*(d.usdInr||83.5)) - Math.round((d.usdEquityInv||0)*(d.usdInr||83.5));
+                const rNpsGain = (d.npsVal||0) - (d.npsInv||0);
+                const rGoldGain = (d.goldVal||0) - (d.goldInv||0);
+                const inrPnl = rInGain + rUsGain + rNpsGain + rGoldGain;
                 const inInrVal = d.inrEquityVal || (d.portfolioVal - (Math.round((d.usdVal||0)*(d.usdInr||83.5))));
                 const usInrVal = (d.usdEquityVal > 0 ? Math.round(d.usdEquityVal * (d.usdInr || 83.5)) : 0) || Math.round((d.usdVal||0)*(d.usdInr||83.5));
                 return(
                   <tr key={d.date} style={{background:i%2===0?T.surface2:T.surface3}} onMouseEnter={e=>e.currentTarget.style.background=T.surface4} onMouseLeave={e=>e.currentTarget.style.background=i%2===0?T.surface2:T.surface3}>
                     <td style={{padding:'12px 16px',textAlign:'left',borderBottom:`1px solid ${T.border}`,color:T.text,fontWeight:600}}>{new Date(d.date).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}</td>
+                    <td style={{padding:'12px 16px',textAlign:'right',borderBottom:`1px solid ${T.border}`,color:T.text3}}>₹{(d.inrInv||8567549).toLocaleString('en-IN')}</td>
                     <td style={{padding:'12px 16px',textAlign:'right',borderBottom:`1px solid ${T.border}`,fontWeight:700,color:T.cyan}}>₹{d.inrVal.toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
-                    <td style={{padding:'12px 16px',textAlign:'right',borderBottom:`1px solid ${T.border}`}}>{inrChg!=null?<span style={{fontWeight:700,color:inrChg>=0?T.success:T.danger}}>{inrChg>=0?'+':'−'}₹{Math.abs(inrChg).toLocaleString('en-IN',{maximumFractionDigits:0})}</span>:'—'}</td>
+                    <td style={{padding:'12px 16px',textAlign:'right',borderBottom:`1px solid ${T.border}`}}>{inrPnl!=null?<span style={{fontWeight:700,color:inrPnl>=0?T.success:T.danger}}>{inrPnl>=0?'+':'−'}₹{Math.abs(inrPnl).toLocaleString('en-IN',{maximumFractionDigits:0})}</span>:'—'}</td>
                     <td style={{padding:'12px 16px',textAlign:'right',borderBottom:`1px solid ${T.border}`,color:T.text2}}>{inInrVal > 0 ? `₹${inInrVal.toLocaleString('en-IN',{maximumFractionDigits:0})}` : '—'}</td>
                     <td style={{padding:'12px 16px',textAlign:'right',borderBottom:`1px solid ${T.border}`,color:T.text2}}>{usInrVal > 0 ? `₹${usInrVal.toLocaleString('en-IN',{maximumFractionDigits:0})}` : '—'}</td>
                     <td style={{padding:'12px 16px',textAlign:'right',borderBottom:`1px solid ${T.border}`,color:T.text2}}>{d.npsVal > 0 ? `₹${d.npsVal.toLocaleString('en-IN',{maximumFractionDigits:0})}` : '—'}</td>
@@ -1948,8 +1959,7 @@ export function NPSModule({T,holdings,setHoldings,navs,setNavs,growth,setGrowth,
   },0);
 
   const totalInvested = (holdings||[]).reduce((a,h)=>a+(parseFloat(h.tInv)||0),0);
-  const totalWithdrawals = (holdings||[]).reduce((a,h)=>a+(parseFloat(h.tOut)||0),0);
-  const totalProfit = (totalVal - totalInvested) + totalWithdrawals;
+  const totalProfit = (totalVal - totalInvested);
   const absReturn = totalInvested > 0 ? (totalProfit / totalInvested) * 100 : 0;
 
   
@@ -2148,10 +2158,7 @@ export function NPSModule({T,holdings,setHoldings,navs,setNavs,growth,setGrowth,
                       cfs.push({date: time, amount: -amt});
                     }
                     
-                    // Withdrawal (positive cash in)
-                    if(h.tOut > 0){
-                      cfs.push({date: end.getTime() - 1000, amount: parseFloat(h.tOut)});
-                    }
+                    
                     
                     // Terminal Value (positive cash in)
                     cfs.push({date: end.getTime(), amount: rowTotal});
@@ -2233,29 +2240,34 @@ export function NPSModule({T,holdings,setHoldings,navs,setNavs,growth,setGrowth,
 
 export function GoldModule({T,holdings,setHoldings,prices,onClose}) {
   const [showAdd,setShowAdd]=useState(false);
-  const [form,setForm]=useState({grams:'',invVal:'',date:new Date().toISOString().split('T')[0],note:''});
+  const [form,setForm]=useState({grams:'',invVal:'',date:new Date().toISOString().split('T')[0],note:'',purity:'24K'});
   
-  const goldPrice = prices['PHYSICAL_GOLD']?.current || 0;
+  const gold24 = prices['GOLD_24K']?.current || prices['PHYSICAL_GOLD']?.current || 0;
+  const gold22 = prices['GOLD_22K']?.current || (gold24 * 0.916);
   const totalGrams = (holdings||[]).reduce((a,h)=>a+(parseFloat(h.grams)||0),0);
   const totalInv = (holdings||[]).reduce((a,h)=>a+(parseFloat(h.invVal)||0),0);
   
   // Final value includes 3% GST as per user requirement
-  const currentValBase = totalGrams * goldPrice;
+  const currentValBase = totalGrams * gold24;
   const currentValWithGst = Math.round(currentValBase * 1.03);
   const totalGain = currentValWithGst - totalInv;
   const gainPct = totalInv > 0 ? (totalGain/totalInv)*100 : 0;
 
   const handleAdd = () => {
     if(!form.grams || !form.invVal) return alert("Please enter weight and invoice value");
+    const rawGrams = parseFloat(form.grams);
+    const grams = form.purity === '22K' ? rawGrams * 0.916 : rawGrams;
     const newH = {
       id: Date.now(),
-      grams: parseFloat(form.grams),
+      grams,
+      rawGrams,
+      purity: form.purity,
       invVal: parseFloat(form.invVal),
       date: form.date,
       note: form.note
     };
     setHoldings(p => [...(p||[]), newH]);
-    setForm({grams:'',invVal:'',date:new Date().toISOString().split('T')[0],note:''});
+    setForm({grams:'',invVal:'',date:new Date().toISOString().split('T')[0],note:'',purity:'24K'});
     setShowAdd(false);
   };
 
@@ -2272,24 +2284,30 @@ export function GoldModule({T,holdings,setHoldings,prices,onClose}) {
         <div>
           <div style={{fontSize:24,fontWeight:800,color:'#FFD700',letterSpacing:'-0.02em',marginBottom:4,display:'flex',alignItems:'center',gap:12}}>
             <span>🟡 Physical Gold Portfolio</span>
-            <div style={{fontSize:10,background:'rgba(255,215,0,0.15)',color:'#FFD700',padding:'2px 8px',borderRadius:20,border:'1px solid rgba(255,215,0,0.3)',letterSpacing:'.05em'}}>24K TRACKER</div>
+            <div style={{fontSize:10,background:'rgba(255,215,0,0.15)',color:'#FFD700',padding:'2px 8px',borderRadius:20,border:'1px solid rgba(255,215,0,0.3)',letterSpacing:'.05em'}}>24K & 22K TRACKER</div>
           </div>
           <div style={{fontSize:14,color:T.text3}}>Secure asset tracking with live global gold rates & 3% GST logic</div>
         </div>
         <div style={{display:'flex',gap:12,alignItems:'center'}}>
-          <div style={{display:'flex', alignItems:'center', gap:8, background:T.surface2, border:`1px solid ${T.border}`, borderRadius:8, padding:'4px 12px'}}>
-            <span style={{fontSize:11, fontWeight:700, color:T.text3, textTransform:'uppercase'}}>Live Rate (24K)</span>
-            <span style={{fontSize:13,fontWeight:800,color:'#FFD700'}}>₹{Math.round(goldPrice).toLocaleString('en-IN')}/g</span>
+          <div style={{display:'flex', flexDirection:'column', gap:4}}>
+            <div style={{display:'flex', alignItems:'center', gap:8, background:T.surface2, border:`1px solid ${T.border}`, borderRadius:8, padding:'4px 12px', minWidth:160, justifyContent:'space-between'}}>
+              <span style={{fontSize:9, fontWeight:700, color:T.text3, textTransform:'uppercase'}}>Live 24K (+3% GST)</span>
+              <span style={{fontSize:13,fontWeight:800,color:'#FFD700'}}>₹{Math.round(gold24 * 1.03).toLocaleString('en-IN')}/g</span>
+            </div>
+            <div style={{display:'flex', alignItems:'center', gap:8, background:T.surface2, border:`1px solid ${T.border}`, borderRadius:8, padding:'4px 12px', minWidth:160, justifyContent:'space-between'}}>
+              <span style={{fontSize:9, fontWeight:700, color:T.text3, textTransform:'uppercase'}}>Live 22K (+3% GST)</span>
+              <span style={{fontSize:13,fontWeight:800,color:'#FFD700'}}>₹{Math.round(gold22 * 1.03).toLocaleString('en-IN')}/g</span>
+            </div>
           </div>
-          <button onClick={()=>setShowAdd(!showAdd)} style={{background:'#FFD700',color:'#000',border:'none',padding:'8px 16px',borderRadius:8,fontWeight:700,cursor:'pointer',display:'flex',alignItems:'center',gap:8,transition:'all .1s'}} onMouseEnter={e=>e.currentTarget.style.transform='scale(1.02)'} onMouseLeave={e=>e.currentTarget.style.transform='scale(1)'}>Add Gold Purchase</button>
-          {onClose&&<button onClick={onClose} style={{background:'none',border:`1px solid ${T.border}`,borderRadius:8,cursor:'pointer',color:T.text3,padding:'8px',display:'flex'}} onMouseEnter={e=>{e.currentTarget.style.borderColor=T.accent;e.currentTarget.style.color=T.accent;}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.text3;}}>X</button>}
+          <button onClick={()=>setShowAdd(!showAdd)} style={{background:'#FFD700',color:'#000',border:'none',padding:'8px 16px',borderRadius:8,fontWeight:700,cursor:'pointer',display:'flex',alignItems:'center',gap:8,transition:'all .1s',height:'fit-content',alignSelf:'center'}} onMouseEnter={e=>e.currentTarget.style.transform='scale(1.02)'} onMouseLeave={e=>e.currentTarget.style.transform='scale(1)'}>Add Gold Purchase</button>
+          {onClose&&<button onClick={onClose} style={{background:'none',border:`1px solid ${T.border}`,borderRadius:8,cursor:'pointer',color:T.text3,padding:'8px',display:'flex',height:'fit-content',alignSelf:'center'}} onMouseEnter={e=>{e.currentTarget.style.borderColor=T.accent;e.currentTarget.style.color=T.accent;}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.text3;}}>X</button>}
         </div>
       </div>
 
       {/* Summary Cards */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:16}}>
         {[
-          {l:'Total Weight', v:totalGrams.toFixed(3)+' g', c:T.text},
+          {l:'Total Weight (24K Eq)', v:totalGrams.toFixed(3)+' g', c:T.text},
           {l:'Initial (Invested)', v:totalInv.toLocaleString('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}), c:T.text},
           {l:'Current Value (+3% GST)', v:currentValWithGst.toLocaleString('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}), c:'#FFD700'},
           {l:'Total P&L', v:`${totalGain>=0?'+':'−'}${Math.abs(totalGain).toLocaleString('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0})} (${gainPct.toFixed(2)}%)`, c:totalGain>=0?T.success:T.danger}
@@ -2306,8 +2324,17 @@ export function GoldModule({T,holdings,setHoldings,prices,onClose}) {
           <div style={{fontSize:15,fontWeight:700,color:T.text}}>New Gold Purchase / Entry</div>
           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:16}}>
             <div style={{display:'flex',flexDirection:'column',gap:6}}>
+              <label style={{fontSize:11,fontWeight:700,color:T.text3,textTransform:'uppercase'}}>Purity</label>
+              <div style={{display:'flex',gap:8}}>
+                {['24K','22K'].map(p=>(
+                  <button key={p} onClick={()=>setForm(f=>({...f,purity:p}))} style={{flex:1,padding:'10px',borderRadius:8,border:`1px solid ${form.purity===p?T.accent:T.border}`,background:form.purity===p?`${T.accent}15`:T.surface3,color:form.purity===p?T.accent:T.text3,fontWeight:700,cursor:'pointer',transition:'all .1s'}}>{p}</button>
+                ))}
+              </div>
+            </div>
+            <div style={{display:'flex',flexDirection:'column',gap:6}}>
               <label style={{fontSize:11,fontWeight:700,color:T.text3,textTransform:'uppercase'}}>Weight (Grams)</label>
               <input type="number" step="0.001" value={form.grams} onChange={e=>setForm(p=>({...p,grams:e.target.value}))} placeholder="0.000" style={{background:T.surface3,border:`1px solid ${T.border}`,borderRadius:8,padding:'10px 12px',color:T.text,fontSize:14}}/>
+              {form.purity==='22K'&&form.grams&&<div style={{fontSize:10,color:T.accent,marginTop:2}}>≈ {(parseFloat(form.grams)*0.916).toFixed(3)}g (24K Eq)</div>}
             </div>
             <div style={{display:'flex',flexDirection:'column',gap:6}}>
               <label style={{fontSize:11,fontWeight:700,color:T.text3,textTransform:'uppercase'}}>Invoice Value (Total Paid)</label>
@@ -2334,21 +2361,25 @@ export function GoldModule({T,holdings,setHoldings,prices,onClose}) {
         <table style={{width:'100%',borderCollapse:'collapse'}}>
           <thead>
             <tr style={{background:T.surface2,borderBottom:`1px solid ${T.border}`}}>
-              {['Date','Weight (g)','Invested (Inv)','Current Value','P&L','Note',''].map(h=>(
+              {['Date','Purity','Weight (24K Eq)','Invested (Inv)','Current Value','P&L','Note',''].map(h=>(
                 <th key={h} style={{padding:'12px 16px',textAlign:'left',fontSize:11,color:T.text3,fontWeight:700,textTransform:'uppercase'}}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {(holdings||[]).length===0?(
-              <tr><td colSpan="7" style={{padding:'40px',textAlign:'center',color:T.text3,fontSize:14}}>No gold entries found. Add your first purchase above.</td></tr>
+              <tr><td colSpan="8" style={{padding:'40px',textAlign:'center',color:T.text3,fontSize:14}}>No gold entries found. Add your first purchase above.</td></tr>
             ):(holdings||[]).sort((a,b)=>new Date(b.date)-new Date(a.date)).map(h=>{
-              const cv = Math.round(h.grams * goldPrice * 1.03);
+              const cv = Math.round(h.grams * gold24 * 1.03);
               const gain = cv - h.invVal;
               return (
                 <tr key={h.id} style={{borderBottom:`1px solid ${T.border}`,transition:'background .1s'}} onMouseEnter={e=>e.currentTarget.style.background=T.surface2} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
                   <td style={{padding:'14px 16px',fontSize:13,color:T.text2}}>{new Date(h.date).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}</td>
-                  <td style={{padding:'14px 16px',fontSize:13,fontWeight:600}}>{h.grams.toFixed(3)}</td>
+                  <td style={{padding:'14px 16px',fontSize:13}}><span style={{background:h.purity==='22K'?'rgba(255,215,0,0.08)':'rgba(255,215,0,0.15)',color:'#FFD700',padding:'2px 8px',borderRadius:4,fontWeight:700,fontSize:10,border:`1px solid ${h.purity==='22K'?'rgba(255,215,0,0.2)':'rgba(255,215,0,0.4)'}`}}>{h.purity||'24K'}</span></td>
+                  <td style={{padding:'14px 16px',fontSize:13}}>
+                    <div style={{fontWeight:600}}>{h.grams.toFixed(3)}</div>
+                    {h.purity==='22K'&&h.rawGrams&&<div style={{fontSize:10,color:T.text3,marginTop:2}}>Orig: {h.rawGrams.toFixed(3)} (22K)</div>}
+                  </td>
                   <td style={{padding:'14px 16px',fontSize:13}}>{h.invVal.toLocaleString('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0})}</td>
                   <td style={{padding:'14px 16px',fontSize:13,color:'#FFD700',fontWeight:700}}>{cv.toLocaleString('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0})}</td>
                   <td style={{padding:'14px 16px',fontSize:13,color:gain>=0?T.success:T.danger,fontWeight:600}}>{gain>=0?'+':'−'}{Math.abs(gain).toLocaleString('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0})}</td>

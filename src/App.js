@@ -494,6 +494,7 @@ function AppInner() {
   };
   const saveTarget=(id,val)=>setTargets(p=>val==null?Object.fromEntries(Object.entries(p).filter(([k])=>+k!==id)):{...p,[id]:val});
   const saveUnpledgedQty=(id,val)=>setHoldings(p=>p.map(h=>h.id===id?{...h,unpledgedQty:val}:h));
+  const saveHoldingUpdates=(id,updates)=>setHoldings(p=>p.map(h=>h.id===id?{...h,...updates}:h));
   const importHoldings=rows=>{const nt={};const nh=rows.map(({analystTarget,...h})=>{if(analystTarget!=null)nt[h.id]=analystTarget;return h;});setHoldings(p=>[...p,...nh]);if(Object.keys(nt).length)setTargets(p=>({...p,...nt}));};
   useEffect(()=>{if(isLoaded)setItemSync('pm_portfolios',JSON.stringify(portfolios));},[portfolios,isLoaded]);
   useEffect(()=>{if(isLoaded)setItemSync('pm_activeId',JSON.stringify(activeId));},[activeId,isLoaded]);
@@ -509,7 +510,6 @@ function AppInner() {
   useEffect(()=>{if(isLoaded)setItemSync('pm_gold_api_key',goldApiKey);},[goldApiKey,isLoaded]);
   useEffect(()=>{if(window.electronAPI?.onUpdateAvailable)window.electronAPI.onUpdateAvailable(()=>setUpdateAvail(true));},[]);
   const fetchPrices=useCallback(async()=>{
-    if(!holdings.length)return;setLoading(true);setError(null);const out={};
     const pFetch = async (url, options={}) => {
       if(window.electronAPI?.netFetch){
         try {
@@ -522,15 +522,17 @@ function AppInner() {
         return await r.json();
       } catch { return null; }
     };
-
-    await Promise.all(holdings.map(async h=>{
+    const allSymbols = Array.from(new Set(portfolios.flatMap(p => p.holdings.map(h => h.symbol))));
+    if(!allSymbols.length) return; setLoading(true); setError(null); const out = {};
+    
+    await Promise.all(allSymbols.map(async symbol=>{
       try{
-        const json = await pFetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(h.symbol)}?interval=1d&range=1d`);
+        const json = await pFetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`);
         const meta=json?.chart?.result?.[0]?.meta;
         if(meta?.regularMarketPrice){
-          out[h.symbol]={current:meta.regularMarketPrice,prev:meta.chartPreviousClose??meta.regularMarketPrice,currency:meta.currency??(isUS(h.symbol)?'USD':'INR')};
-        }else out[h.symbol]=null;
-      }catch{out[h.symbol]=null;}
+          out[symbol]={current:meta.regularMarketPrice,prev:meta.chartPreviousClose??meta.regularMarketPrice,currency:meta.currency??(isUS(symbol)?'USD':'INR')};
+        }else out[symbol]=null;
+      }catch{out[symbol]=null;}
     }));
 
     // Fetch Live Gold Rate
@@ -540,6 +542,8 @@ function AppInner() {
         // Option 1: GoldAPI.io
         const gapi = await pFetch(`https://www.goldapi.io/api/XAU/INR`, { headers: { 'x-access-token': goldApiKey } });
         if(gapi?.price_gram_24k) {
+          out['GOLD_24K'] = { current: gapi.price_gram_24k, currency: 'INR' };
+          out['GOLD_22K'] = { current: gapi.price_gram_22k || (gapi.price_gram_24k * 0.916), currency: 'INR' };
           out['PHYSICAL_GOLD'] = { current: gapi.price_gram_24k, currency: 'INR' };
           foundGold = true;
         }
@@ -548,14 +552,15 @@ function AppInner() {
       if(!foundGold) {
         // Option 2: Scrape from Swarna (Highly accurate Indian retail rate)
         try {
-          // netFetch uses Electron's network stack which bypasses many bot checks
           const html = await window.electronAPI.netFetch('https://shop.swarna.com/', { headers: { 'User-Agent': 'Mozilla/5.0' } });
-          const match = html.match(/Gold 22 KT - ₹\s*(\d+)/);
-          if(match && match[1]) {
-            const price22k = parseFloat(match[1]);
-            // Convert 22K to 24K (22K is 91.6% pure)
-            const price24k = price22k / 0.916;
-            out['PHYSICAL_GOLD'] = { current: price24k, currency: 'INR' };
+          const m22 = html.match(/Gold 22 KT - ₹\s*([\d,]+)/);
+          const m24 = html.match(/Gold 24 KT - ₹\s*([\d,]+)/);
+          if(m22 && m22[1]) {
+            const p22 = parseFloat(m22[1].replace(/,/g,''));
+            const p24 = m24 ? parseFloat(m24[1].replace(/,/g,'')) : (p22 / 0.916);
+            out['GOLD_22K'] = { current: p22, currency: 'INR' };
+            out['GOLD_24K'] = { current: p24, currency: 'INR' };
+            out['PHYSICAL_GOLD'] = { current: p24, currency: 'INR' };
             foundGold = true;
           }
         } catch(e) { console.error("Swarna scrape error", e); }
@@ -566,7 +571,10 @@ function AppInner() {
         const gjson = await pFetch(`https://query1.finance.yahoo.com/v8/finance/chart/XAUINR%3DX?interval=1d&range=1d`);
         const gmeta = gjson?.chart?.result?.[0]?.meta;
         if(gmeta?.regularMarketPrice) {
-          out['PHYSICAL_GOLD'] = { current: gmeta.regularMarketPrice / 31.1035, currency: 'INR' };
+          const p24 = gmeta.regularMarketPrice / 31.1035;
+          out['GOLD_24K'] = { current: p24, currency: 'INR' };
+          out['GOLD_22K'] = { current: p24 * 0.916, currency: 'INR' };
+          out['PHYSICAL_GOLD'] = { current: p24, currency: 'INR' };
         }
       }
     } catch(e) { console.error("Gold fetch error", e); }
@@ -583,7 +591,7 @@ function AppInner() {
       return anyNew ? merged : prev;
     });
     setLastUpdated(new Date());setLoading(false);
-  },[holdings]);
+  },[portfolios]);
 
   // Global background snapshot logic
   useEffect(() => {
@@ -641,7 +649,7 @@ function AppInner() {
         return prev.map(p => p.date === today ? { 
           ...p, 
           inrVal: finalInrVal, 
-          inrInv: finalInrInv, 
+          inrInv: 8567549, // Forced baseline from user
           npsVal: Math.round(npsVal), 
           npsInv: Math.round(npsInv),
           goldVal: Math.round(goldVal), 
@@ -655,7 +663,7 @@ function AppInner() {
       return [...prev, { 
         date: today, 
         inrVal: finalInrVal, 
-        inrInv: finalInrInv, 
+        inrInv: 8567549, // Forced baseline from user
         npsVal: Math.round(npsVal), 
         npsInv: Math.round(npsInv),
         goldVal: Math.round(goldVal), 
@@ -822,12 +830,34 @@ Respond ONLY as a JSON object with these keys:
   const usRows=useMemo(()=>rows.filter(r=>r.currency==='USD'),[rows]);
   const inPie=useMemo(()=>inRows.map(r=>({name:short(r.symbol),value:r.curValue??r.invested})),[inRows]);
   const usPie=useMemo(()=>usRows.map(r=>({name:short(r.symbol),value:r.curValue??r.invested})),[usRows]);
+  const invIN=inRows.reduce((s,r)=>s+r.invested,0),invUS=usRows.reduce((s,r)=>s+r.invested,0);
   const gainIN=inRows.reduce((s,r)=>s+(r.gain??0),0),gainUS=usRows.reduce((s,r)=>s+(r.gain??0),0);
   const dayIN=inRows.reduce((s,r)=>s+(r.dayPL??0),0),dayUS=usRows.reduce((s,r)=>s+(r.dayPL??0),0);
-  const totalIN=inRows.reduce((s,r)=>s+(r.curValue??r.invested),0),totalUS=usRows.reduce((s,r)=>s+(r.curValue??r.invested),0);
-  const invIN=inRows.reduce((s,r)=>s+r.invested,0),invUS=usRows.reduce((s,r)=>s+r.invested,0);
+  const totalPortInr=inRows.reduce((s,r)=>s+(r.curValue??r.invested),0),totalPortUsd=usRows.reduce((s,r)=>s+(r.curValue??r.invested),0);
+  const globalInrEquity = allRows.filter(r=>r.currency==='INR').reduce((s,r)=>s+(r.curValue??r.invested),0);
+  const globalUsdEquity = allRows.filter(r=>r.currency==='USD').reduce((s,r)=>s+(r.curValue??r.invested),0);
+  const globalGainIN = allRows.filter(r=>r.currency==='INR').reduce((s,r)=>s+(r.gain??0),0);
+  const globalDayIN = allRows.filter(r=>r.currency==='INR').reduce((s,r)=>s+(r.dayPL??0),0);
+  const globalGainUS = allRows.filter(r=>r.currency==='USD').reduce((s,r)=>s+(r.gain??0),0);
+  const globalDayUS = allRows.filter(r=>r.currency==='USD').reduce((s,r)=>s+(r.dayPL??0),0);
+
+  // Total Portfolio Analytics
+  const npsGain = (npsHoldings||[]).reduce((a,h)=>{
+    const getNavKey=(pfm,s)=>pfm.split(' ')[0].toUpperCase() + '_' + s;
+    const v = (h.e * (navs[getNavKey(h.pfm,'E')]||0)) + (h.c * (navs[getNavKey(h.pfm,'C')]||0)) + (h.g * (navs[getNavKey(h.pfm,'G')]||0));
+    return a + (v - (h.tInv||0));
+  }, 0);
+  const goldPrice = prices['PHYSICAL_GOLD']?.current || 0;
+  const goldGain = (goldHoldings||[]).reduce((a,h)=>{
+    const cur = (h.grams * goldPrice * 1.03);
+    return a + (cur - (h.invVal||0));
+  }, 0);
+  const totalInvBaseline = 8567549; // Fixed baseline as requested
+  const totalActualGain = globalGainIN + (globalGainUS * (usdInr||83.5)) + npsGain + goldGain;
+  const totalPortfolioGain = totalActualGain;
+  // Override totalGain if needed, but we'll use the calculated one
   const activeStock=mainTab.startsWith('stock:')?mainTab.slice(6):null;
-  const sharedProps={fetchPrices,loading,error,lastUpdated,onSaveUnpledged:saveUnpledgedQty,onRemove:removeHolding,compact:tweaks.compactRows,addHolding,T};
+  const sharedProps={fetchPrices,loading,error,lastUpdated,onSaveUnpledged:saveUnpledgedQty,onSaveUpdates:saveHoldingUpdates,onRemove:removeHolding,compact:tweaks.compactRows,addHolding,T};
 
   const SidebarContent=({sRows,pie,currency,usdInr,invAmt,totalAmt,gain,dayGain,offset})=>{
     return(
@@ -925,22 +955,26 @@ Respond ONLY as a JSON object with these keys:
 
         {/* P&L pills */}
         <div className="pnl-pills" style={{display:'flex',gap:10,alignItems:'center',WebkitAppRegion:'no-drag'}}>
-          {inRows.length>0&&<div style={{display:'flex',alignItems:'center',gap:8,padding:'5px 12px',background:T.surface2,borderRadius:8,border:`1px solid ${T.border}`}}>
+          <div style={{display:'flex',alignItems:'center',gap:8,padding:'5px 12px',background:T.surface2,borderRadius:8,border:`1px solid ${T.accent}`,boxShadow:`0 0 10px ${T.accent}20`}}>
+            <span style={{fontSize:11,fontWeight:700,color:T.text3,textTransform:'uppercase',letterSpacing:'.05em'}}>Total P&L</span>
+            <span style={{fontSize:14,fontWeight:800,color:gColor(totalPortfolioGain,T)}}>{totalPortfolioGain>=0?'+':'−'}₹{Math.abs(totalPortfolioGain).toLocaleString('en-IN',{maximumFractionDigits:0})}</span>
+          </div>
+          {(globalInrEquity > 0) && <div style={{display:'flex',alignItems:'center',gap:8,padding:'5px 12px',background:T.surface2,borderRadius:8,border:`1px solid ${T.border}`}}>
             <span style={{fontSize:12}}>🇮🇳</span>
-            <span style={{fontSize:13,fontWeight:700,color:gColor(gainIN,T)}}>{gainIN>=0?'+':'−'}₹{Math.abs(gainIN).toLocaleString('en-IN',{maximumFractionDigits:0})}</span>
+            <span style={{fontSize:13,fontWeight:700,color:gColor(globalGainIN,T)}}>{globalGainIN>=0?'+':'−'}₹{Math.abs(globalGainIN).toLocaleString('en-IN',{maximumFractionDigits:0})}</span>
             <div style={{width:1,height:14,background:T.border}}/>
-            <span style={{fontSize:11,color:gColor(dayIN,T)}}>{dayIN>=0?'+':'−'}₹{Math.abs(dayIN).toLocaleString('en-IN',{maximumFractionDigits:0})} today</span>
+            <span style={{fontSize:11,color:gColor(globalDayIN,T)}}>{globalDayIN>=0?'+':'−'}₹{Math.abs(globalDayIN).toLocaleString('en-IN',{maximumFractionDigits:0})} today</span>
           </div>}
-          {usRows.length>0&&<div style={{display:'flex',alignItems:'center',gap:8,padding:'5px 12px',background:T.surface2,borderRadius:8,border:`1px solid ${T.border}`}}>
+          {(globalUsdEquity > 0) && <div style={{display:'flex',alignItems:'center',gap:8,padding:'5px 12px',background:T.surface2,borderRadius:8,border:`1px solid ${T.border}`}}>
             <span style={{fontSize:12}}>🇺🇸</span>
             <div style={{display:'flex',flexDirection:'column',gap:1}}>
-              <span style={{fontSize:13,fontWeight:700,color:gColor(gainUS,T)}}>{gainUS>=0?'+':'−'}${Math.abs(gainUS).toLocaleString('en-US',{maximumFractionDigits:0})}</span>
-              {usdInr&&<span style={{fontSize:9,color:gColor(gainUS,T),opacity:.75}}>≈ {gainUS>=0?'+':'−'}₹{Math.abs(gainUS*usdInr).toLocaleString('en-IN',{maximumFractionDigits:0})}</span>}
+              <span style={{fontSize:13,fontWeight:700,color:gColor(globalGainUS,T)}}>{globalGainUS>=0?'+':'−'}${Math.abs(globalGainUS).toLocaleString('en-US',{maximumFractionDigits:0})}</span>
+              {usdInr&&<span style={{fontSize:9,color:gColor(globalGainUS,T),opacity:.75}}>≈ {globalGainUS>=0?'+':'−'}₹{Math.abs(globalGainUS*usdInr).toLocaleString('en-IN',{maximumFractionDigits:0})}</span>}
             </div>
             <div style={{width:1,height:18,background:T.border}}/>
             <div style={{display:'flex',flexDirection:'column',gap:1}}>
-              <span style={{fontSize:11,color:gColor(dayUS,T)}}>{dayUS>=0?'+':'−'}${Math.abs(dayUS).toLocaleString('en-US',{maximumFractionDigits:0})} today</span>
-              {usdInr&&<span style={{fontSize:9,color:gColor(dayUS,T),opacity:.75}}>≈ {dayUS>=0?'+':'−'}₹{Math.abs(dayUS*usdInr).toLocaleString('en-IN',{maximumFractionDigits:0})}</span>}
+              <span style={{fontSize:11,color:gColor(globalDayUS,T)}}>{globalDayUS>=0?'+':'−'}${Math.abs(globalDayUS).toLocaleString('en-US',{maximumFractionDigits:0})} today</span>
+              {usdInr&&<span style={{fontSize:9,color:gColor(globalDayUS,T),opacity:.75}}>≈ {globalDayUS>=0?'+':'−'}₹{Math.abs(globalDayUS*usdInr).toLocaleString('en-IN',{maximumFractionDigits:0})}</span>}
             </div>
           </div>}
         </div>
@@ -1047,8 +1081,8 @@ Respond ONLY as a JSON object with these keys:
                 </div>
                 <div className="right-sidebar" style={{overflowY:'auto',padding:rightSidebarCollapsed?0:'20px 16px 20px 0',borderLeft:rightSidebarCollapsed?'none':`1px solid ${T.border}`,opacity:rightSidebarCollapsed?0:1,transition:'opacity 0.2s'}}>
                   <div style={{padding:'0 0 0 16px'}}>
-                    {mainTab==='IN'&&<SidebarContent sRows={inRows} pie={inPie} currency="INR" invAmt={invIN} totalAmt={totalIN} gain={gainIN} dayGain={dayIN} offset={0}/>}
-                    {mainTab==='US'&&<SidebarContent sRows={usRows} pie={usPie} currency="USD" usdInr={usdInr} invAmt={invUS} totalAmt={totalUS} gain={gainUS} dayGain={dayUS} offset={6}/>}
+                    {mainTab==='IN'&&<SidebarContent sRows={inRows} pie={inPie} currency="INR" invAmt={invIN} totalAmt={totalPortInr} gain={gainIN} dayGain={dayIN} offset={0}/>}
+                    {mainTab==='US'&&<SidebarContent sRows={usRows} pie={usPie} currency="USD" usdInr={usdInr} invAmt={invUS} totalAmt={totalPortUsd} gain={gainUS} dayGain={dayUS} offset={6}/>}
                   </div>
                 </div>
               </div>

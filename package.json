@@ -1,7 +1,7 @@
 {
   "name": "portfolio-manager-pro",
   "version": "5.0.0",
-  "description": "Stock Portfolio Monitor for Windows 11",
+  "description": "Portfolio Manager Pro - Premium Asset Tracking",
   "author": "Arun Verma <arunmcops@gmail.com>",
   "main": "main.js",
   "scripts": {
@@ -24,7 +24,7 @@
   },
   "build": {
     "appId": "com.portfolio.desktop",
-    "productName": "Stock Portfolio Monitor",
+    "productName": "Portfolio Manager Pro",
     "asar": true,
     "compression": "maximum",
     "files": [
@@ -57,7 +57,7 @@
       "createStartMenuShortcut": true,
       "installerIcon": "assets/icon.ico",
       "uninstallerIcon": "assets/icon.ico",
-      "shortcutName": "Portfolio Manager",
+      "shortcutName": "Portfolio Manager Pro",
       "runAfterFinish": true,
       "perMachine": false
     },

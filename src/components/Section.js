@@ -5,7 +5,38 @@ import { UnpledgedQtyCell, StatCard } from './cells';
 import { Ic } from '../icons';
 import { fmt, fmtQty, fmtPct, sortRows, gColor, isUS, short } from '../utils';
 
-export function Section({title,flag,accent,rows,currency,usdInr,onSaveUnpledged,onRemove,fetchPrices,loading,error,lastUpdated,compact,onImportCSV,addHolding,onRowClick,T}) {
+function EditableCell({ value, onSave, isQty, currency, T }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(value);
+  const doSave = () => {
+    const num = parseFloat(val);
+    if (!isNaN(num)) onSave(num);
+    setEditing(false);
+  };
+  if (editing) {
+    return (
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center', justifyContent: 'flex-end' }} onClick={e => e.stopPropagation()}>
+        <input 
+          type="number" 
+          value={val} 
+          onChange={e => setVal(e.target.value)} 
+          autoFocus 
+          onKeyDown={e => e.key === 'Enter' && doSave()}
+          onBlur={doSave}
+          style={{ width: 80, textAlign: 'right', padding: '4px 8px', fontSize: 12, background: T.surface4, border: `1px solid ${T.accent}`, borderRadius: 4, color: T.text, outline: 'none' }}
+        />
+      </div>
+    );
+  }
+  return (
+    <div onClick={(e) => { e.stopPropagation(); setEditing(true); }} style={{ cursor: 'pointer', padding: '4px 8px', borderRadius: 4, transition: 'all .1s', minHeight: 24, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', border: `1px solid transparent` }} onMouseEnter={e => { e.currentTarget.style.background = T.surface3; e.currentTarget.style.borderColor = `${T.accent}30`; }} onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; }}>
+      <span style={{color:T.text2}}>{isQty ? fmtQty(value) : fmt(value, currency)}</span>
+      <Ic.Pencil size={10} style={{marginLeft:6, opacity:0.3}}/>
+    </div>
+  );
+}
+
+export function Section({title,flag,accent,rows,currency,usdInr,onSaveUnpledged,onSaveUpdates,onRemove,fetchPrices,loading,error,lastUpdated,compact,onImportCSV,addHolding,onRowClick,T}) {
   const [sort,setSort]=useState({col:'allocPct',dir:'desc'});
   const [filter,setFilter]=useState('');
   const [showAdd,setShowAdd]=useState(false);
@@ -96,9 +127,9 @@ export function Section({title,flag,accent,rows,currency,usdInr,onSaveUnpledged,
                 <NvInput value={srch} onChange={e=>doSearch(e.target.value)} autoFocus onFocus={e=>setFocused(true)} onBlur={()=>setTimeout(()=>setFocused(false),200)} placeholder={currency==='INR'?'e.g. TCS, RELIANCE.NS…':'e.g. AAPL, Tesla…'} T={T}/>
                 {busyS&&<span style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',fontSize:11,color:T.text3}}>…</span>}
                 {focused&&results.length>0&&(
-                  <div style={{position:'absolute',top:'calc(100% + 4px)',left:0,right:0,zIndex:9999,background:T.surface3,border:`1px solid ${T.border2}`,borderRadius:T.r,boxShadow:'0 8px 24px rgba(0,0,0,.3)',overflow:'hidden'}}>
-                    {results.map((r,i)=><div key={r.symbol} onMouseDown={()=>selectResult(r)} style={{padding:'10px 14px',cursor:'pointer',display:'flex',justifyContent:'space-between',alignItems:'center',borderBottom:i<results.length-1?`1px solid ${T.border}`:'none',transition:'background .08s'}} onMouseEnter={e=>e.currentTarget.style.background=T.surface4} onMouseLeave={e=>e.currentTarget.style.background='transparent'}><div><span style={{fontWeight:700,fontSize:13,color:T.accent}}>{r.symbol}</span><span style={{fontSize:12,color:T.text3,marginLeft:8}}>{r.longname||r.shortname||''}</span></div>{r.exchDisp&&<span style={{fontSize:10,background:T.accentBg,color:T.accent,padding:'2px 8px',borderRadius:4,fontWeight:600}}>{r.exchDisp}</span>}</div>)}
-                  </div>
+                   <div style={{position:'absolute',top:'calc(100% + 4px)',left:0,right:0,zIndex:9999,background:T.surface3,border:`1px solid ${T.border2}`,borderRadius:T.r,boxShadow:'0 8px 24px rgba(0,0,0,.3)',overflow:'hidden'}}>
+                     {results.map((r,i)=><div key={r.symbol} onMouseDown={()=>selectResult(r)} style={{padding:'10px 14px',cursor:'pointer',display:'flex',justifyContent:'space-between',alignItems:'center',borderBottom:i<results.length-1?`1px solid ${T.border}`:'none',transition:'background .08s'}} onMouseEnter={e=>e.currentTarget.style.background=T.surface4} onMouseLeave={e=>e.currentTarget.style.background='transparent'}><div><span style={{fontWeight:700,fontSize:13,color:T.accent}}>{r.symbol}</span><span style={{fontSize:12,color:T.text3,marginLeft:8}}>{r.longname||r.shortname||''}</span></div>{r.exchDisp&&<span style={{fontSize:10,background:T.accentBg,color:T.accent,padding:'2px 8px',borderRadius:4,fontWeight:600}}>{r.exchDisp}</span>}</div>)}
+                   </div>
                 )}
               </div>
               {form.symbol&&<div style={{fontSize:11,color:T.accent,marginTop:4,fontWeight:600}}>✓ {form.symbol} — {form.name}</div>}
@@ -155,9 +186,9 @@ export function Section({title,flag,accent,rows,currency,usdInr,onSaveUnpledged,
                       </div>
                     </div>
                   </td>
-                  <td style={{...tdN,color:T.text2}}>{fmtQty(r.qty)}</td>
+                  <td style={tdN}><EditableCell value={r.qty} isQty onSave={val=>onSaveUpdates(r.id,{qty:val})} T={T}/></td>
                   <td style={{...tdB,textAlign:'right'}} onClick={e=>e.stopPropagation()}><UnpledgedQtyCell id={r.id} unpledgedQty={r.unpledgedQty??null} totalQty={r.qty} onSave={onSaveUnpledged} T={T}/></td>
-                  <td style={{...tdN,color:T.text2}}>{fmt(r.buyPrice,currency)}</td>
+                  <td style={tdN}><EditableCell value={r.buyPrice} currency={currency} onSave={val=>onSaveUpdates(r.id,{buyPrice:val})} T={T}/></td>
                   <td style={{...tdN,color:T.text}}>{fmt(r.invested,currency)}</td>
                   <td style={{...tdN,fontWeight:700,color:T.text}}>{r.curPrice!=null?fmt(r.curPrice,currency):<span style={{color:T.text3,fontSize:10}}>Live…</span>}</td>
                   <td style={{...tdN}}><Badge val={r.dayChange} pct T={T}/></td>
@@ -181,7 +212,7 @@ export function Section({title,flag,accent,rows,currency,usdInr,onSaveUnpledged,
                       <span style={{fontSize:11,color:T.text2,fontWeight:600,minWidth:36,textAlign:'right'}}>{r.allocPct.toFixed(1)}%</span>
                     </div>
                   </td>
-                  <td style={{...tdB}} onClick={e=>e.stopPropagation()}><button onClick={()=>onRemove(r.id)} style={{background:'none',border:'none',cursor:'pointer',color:T.text3,padding:'4px 6px',borderRadius:4,display:'flex',transition:'all .1s'}} onMouseEnter={e=>{e.currentTarget.style.color=T.danger;e.currentTarget.style.background=T.dangerBg;}} onMouseLeave={e=>{e.currentTarget.style.color=T.text3;e.currentTarget.style.background='none';}} title="Remove"><Ic.Trash/></button></td>
+                  <td style={{...tdB}} onClick={e=>e.stopPropagation()}><button onClick={()=>onRemove(r.id)} style={{background:'none',border:'none',color:T.text3,padding:'4px 6px',borderRadius:4,display:'flex',transition:'all .1s'}} onMouseEnter={e=>{e.currentTarget.style.color=T.danger;e.currentTarget.style.background=T.dangerBg;}} onMouseLeave={e=>{e.currentTarget.style.color=T.text3;e.currentTarget.style.background='none';}} title="Remove"><Ic.Trash/></button></td>
                 </tr>
               ))}
             </tbody>
