@@ -1166,7 +1166,7 @@ export function HistoryModule({T,history,setHistory,onClose}) {
   if(!data.length)return(
     <div style={{flex:1,overflowY:'auto',minHeight:0}}>
       <div style={{padding:24,display:'flex',flexDirection:'column',gap:16}}>
-      <div style={{fontSize:20,fontWeight:700,color:T.text}}>Portfolio History</div>
+      <div style={{fontSize:20,fontWeight:700,color:T.text}}>Asset Performance Dashboard</div>
       <div style={{background:T.surface2,borderRadius:8,border:`1px solid ${T.border}`,padding:40,textAlign:'center',color:T.text3}}>No history yet. Snapshots are saved automatically each time prices refresh. Come back tomorrow!</div>
       </div>
     </div>
@@ -1196,7 +1196,6 @@ export function HistoryModule({T,history,setHistory,onClose}) {
       </div>
 
       <div style={{padding:'0 32px 32px',display:'flex',flexDirection:'column',gap:24}}>
-        {/* Asset Breakdown Table */}
         <div style={{background:T.surface2,borderRadius:12,border:`1px solid ${T.border}`,padding:'20px',boxShadow:'0 4px 20px rgba(0,0,0,0.1)'}}>
           <div style={{fontSize:15,fontWeight:700,color:T.text,marginBottom:16,display:'flex',alignItems:'center',gap:8}}>
             <Ic.TrendingUp size={18} color={T.accent}/> Current Asset Allocation & Performance
@@ -1251,7 +1250,6 @@ export function HistoryModule({T,history,setHistory,onClose}) {
           </div>
         </div>
 
-        {/* Data table */}
         <div style={{background:T.surface2,borderRadius:12,border:`1px solid ${T.border}`,overflow:'hidden',boxShadow:'0 4px 20px rgba(0,0,0,0.1)'}}>
           <div style={{padding:'16px 20px',borderBottom:`1px solid ${T.border}`,display:'flex',alignItems:'center',gap:8}}>
             <Ic.LineChart size={16} color={T.text2}/>
@@ -1280,31 +1278,10 @@ export function HistoryModule({T,history,setHistory,onClose}) {
                     <td style={{padding:'12px 16px',textAlign:'right',borderBottom:`1px solid ${T.border}`,color:T.text2}}>{d.goldVal > 0 ? `₹${d.goldVal.toLocaleString('en-IN',{maximumFractionDigits:0})}` : '—'}</td>
                   </tr>
                 );
-      </div>
-
-      {/* Data table */}
-      <div style={{background:T.surface2,borderRadius:8,border:`1px solid ${T.border}`,overflow:'hidden'}}>
-        <div style={{padding:'12px 16px',borderBottom:`1px solid ${T.border}`}}><span style={{fontSize:13,fontWeight:700,color:T.text}}>Daily Snapshots</span></div>
-        <div style={{overflowX:'auto',maxHeight:300,overflowY:'auto'}}>
-          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
-            <thead style={{position:'sticky',top:0,zIndex:2}}><tr style={{background:T.surface3}}>{['Date','Total Value (₹)','Day Chg (₹)','US Portfolio ($)','US Day Chg'].map(h=><th key={h} style={{padding:'9px 14px',textAlign:'left',color:T.text3,fontWeight:700,fontSize:11,borderBottom:`1px solid ${T.border}`}}>{h}</th>)}</tr></thead>
-            <tbody>{[...data].reverse().map((d,i)=>{
-              const prev=data[data.length-2-i];
-              const inrChg=prev?d.inrVal-prev.inrVal:null;
-              const usdChg=prev?d.usdVal-prev.usdVal:null;
-              return(
-                <tr key={d.date} style={{background:i%2===0?T.surface2:T.surface3}} onMouseEnter={e=>e.currentTarget.style.background=T.surface4} onMouseLeave={e=>e.currentTarget.style.background=i%2===0?T.surface2:T.surface3}>
-                  <td style={{padding:'9px 14px',borderBottom:`1px solid ${T.border}`,color:T.text,fontWeight:600}}>{new Date(d.date).toLocaleDateString('en-IN',{weekday:'short',day:'2-digit',month:'short',year:'numeric'})}</td>
-                  <td style={{padding:'9px 14px',borderBottom:`1px solid ${T.border}`,fontWeight:700,color:T.cyan}}>₹{d.inrVal.toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
-                  <td style={{padding:'9px 14px',borderBottom:`1px solid ${T.border}`}}>{inrChg!=null?<span style={{fontWeight:700,color:inrChg>=0?T.success:T.danger}}>{inrChg>=0?'+':'−'}₹{Math.abs(inrChg).toLocaleString('en-IN',{maximumFractionDigits:0})}</span>:'—'}</td>
-                  <td style={{padding:'9px 14px',borderBottom:`1px solid ${T.border}`,color:T.text2}}>{d.usdVal>0?`$${d.usdVal.toLocaleString('en-US',{maximumFractionDigits:0})}`:'—'}</td>
-                  <td style={{padding:'9px 14px',borderBottom:`1px solid ${T.border}`}}>{usdChg!=null&&d.usdVal>0?<span style={{fontWeight:700,color:usdChg>=0?T.success:T.danger}}>{usdChg>=0?'+':'−'}${Math.abs(usdChg).toLocaleString('en-US',{maximumFractionDigits:0})}</span>:'—'}</td>
-                </tr>
-              );
-            })}</tbody>
-          </table>
+              })}</tbody>
+            </table>
+          </div>
         </div>
-      </div>
       </div>
     </div>
   );
