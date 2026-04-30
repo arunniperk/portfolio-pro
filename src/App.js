@@ -578,14 +578,15 @@ function AppInner() {
         const pr = prices[h.symbol];
         if(!pr) return;
         const curVal = h.qty * pr.current;
+        const invVal = h.qty * h.buyPrice;
         if(pr.currency === 'USD') {
           totalUsdVal += curVal;
-          totalUsdInv += h.invested;
+          totalUsdInv += invVal;
           totalInrVal += curVal * (usdInr || 83.5);
-          totalInrInv += h.invested * (usdInr || 83.5);
+          totalInrInv += invVal * (usdInr || 83.5);
         } else {
           totalInrVal += curVal;
-          totalInrInv += h.invested;
+          totalInrInv += invVal;
         }
       });
     });
@@ -611,8 +612,9 @@ function AppInner() {
     setHistory(prev => {
       const existing = prev.find(p => p.date === today);
       if(existing) {
-        const diff = Math.abs(existing.inrVal - finalInrVal) / Math.max(existing.inrVal, 1);
-        if(diff < 0.0005) return prev; // 0.05% threshold
+        const dVal = Math.abs(existing.inrVal - finalInrVal) / Math.max(existing.inrVal, 1);
+        const dInv = Math.abs((existing.inrInv||0) - finalInrInv) / Math.max(existing.inrInv||1, 1);
+        if(dVal < 0.0005 && dInv < 0.0005) return prev; 
         return prev.map(p => p.date === today ? { ...p, inrVal: finalInrVal, inrInv: finalInrInv, npsVal: Math.round(npsVal), goldVal: Math.round(goldVal), portfolioVal: Math.round(totalInrVal), usdVal: Math.round(totalUsdVal), usdInv: Math.round(totalUsdInv) } : p);
       }
       return [...prev, { date: today, inrVal: finalInrVal, inrInv: finalInrInv, npsVal: Math.round(npsVal), goldVal: Math.round(goldVal), portfolioVal: Math.round(totalInrVal), usdVal: Math.round(totalUsdVal), usdInv: Math.round(totalUsdInv) }].slice(-365);
@@ -870,7 +872,7 @@ Respond ONLY as a JSON object with these keys:
           </div>
           <div>
             <div style={{fontSize:14,fontWeight:700,color:T.text,letterSpacing:'-.01em'}}>Portfolio Manager</div>
-            <div style={{fontSize:10,color:T.text3,marginTop:1}}>Arun Verma · v4.9.5</div>
+            <div style={{fontSize:10,color:T.text3,marginTop:1}}>Arun Verma · v4.9.6</div>
           </div>
         </div>
 
@@ -966,7 +968,7 @@ Respond ONLY as a JSON object with these keys:
             <button onClick={()=>setShowSettings(v=>!v)} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:6,background:showSettings?T.accentBg:'transparent',border:'none',cursor:'pointer',width:'100%',color:showSettings?T.accent:T.text3,transition:'all .15s',fontSize:12}}>
               <Ic.Settings/> Settings
             </button>
-            <div style={{fontSize:9,color:T.text3,textAlign:'center',marginTop:8,letterSpacing:'.05em',opacity:0.6}}>VERSION 4.9.5</div>
+            <div style={{fontSize:9,color:T.text3,textAlign:'center',marginTop:8,letterSpacing:'.05em',opacity:0.6}}>VERSION 4.9.6</div>
             </div>
           </div>
         </div>
