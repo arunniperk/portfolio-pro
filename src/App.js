@@ -513,17 +513,34 @@ function AppInner() {
 
     // Fetch Live Gold Rate
     try {
+      let foundGold = false;
       if(goldApiKey) {
-        // Use GoldAPI.io for premium accurate rates
+        // Option 1: GoldAPI.io
         const gapi = await pFetch(`https://www.goldapi.io/api/XAU/INR`, { headers: { 'x-access-token': goldApiKey } });
         if(gapi?.price_gram_24k) {
           out['PHYSICAL_GOLD'] = { current: gapi.price_gram_24k, currency: 'INR' };
+          foundGold = true;
         }
       }
       
-      if(!out['PHYSICAL_GOLD']) {
-        // Fallback or No Key: Use Yahoo Finance XAUINR=X (Spot Gold in INR)
-        // XAUINR=X is per Troy Ounce
+      if(!foundGold) {
+        // Option 2: Scrape from Swarna (Highly accurate Indian retail rate)
+        try {
+          // netFetch uses Electron's network stack which bypasses many bot checks
+          const html = await window.electronAPI.netFetch('https://shop.swarna.com/', { headers: { 'User-Agent': 'Mozilla/5.0' } });
+          const match = html.match(/Gold 22 KT - ₹\s*(\d+)/);
+          if(match && match[1]) {
+            const price22k = parseFloat(match[1]);
+            // Convert 22K to 24K (22K is 91.6% pure)
+            const price24k = price22k / 0.916;
+            out['PHYSICAL_GOLD'] = { current: price24k, currency: 'INR' };
+            foundGold = true;
+          }
+        } catch(e) { console.error("Swarna scrape error", e); }
+      }
+
+      if(!foundGold) {
+        // Option 3: Fallback to Yahoo Finance XAUINR=X
         const gjson = await pFetch(`https://query1.finance.yahoo.com/v8/finance/chart/XAUINR%3DX?interval=1d&range=1d`);
         const gmeta = gjson?.chart?.result?.[0]?.meta;
         if(gmeta?.regularMarketPrice) {
@@ -853,7 +870,7 @@ Respond ONLY as a JSON object with these keys:
           </div>
           <div>
             <div style={{fontSize:14,fontWeight:700,color:T.text,letterSpacing:'-.01em'}}>Portfolio Manager</div>
-            <div style={{fontSize:10,color:T.text3,marginTop:1}}>Arun Verma · v4.9.2</div>
+            <div style={{fontSize:10,color:T.text3,marginTop:1}}>Arun Verma · v4.9.3</div>
           </div>
         </div>
 
@@ -949,7 +966,7 @@ Respond ONLY as a JSON object with these keys:
             <button onClick={()=>setShowSettings(v=>!v)} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:6,background:showSettings?T.accentBg:'transparent',border:'none',cursor:'pointer',width:'100%',color:showSettings?T.accent:T.text3,transition:'all .15s',fontSize:12}}>
               <Ic.Settings/> Settings
             </button>
-            <div style={{fontSize:9,color:T.text3,textAlign:'center',marginTop:8,letterSpacing:'.05em',opacity:0.6}}>VERSION 4.9.2</div>
+            <div style={{fontSize:9,color:T.text3,textAlign:'center',marginTop:8,letterSpacing:'.05em',opacity:0.6}}>VERSION 4.9.3</div>
             </div>
           </div>
         </div>
