@@ -884,7 +884,7 @@ Respond ONLY as a JSON object with these keys:
     {id:'sectors',   label:'Sectors',  icon:'🏭', color:'#6366f1'},
     {id:'news',      label:'News',     icon:'📰', color:'#8b5cf6'},
     {id:'benchmark', label:'Benchmark',icon:'📊', color:'#00b4d8'},
-    {id:'history',   label:'History',  icon:'📈', color:'#f97316'},
+    {id:'history',   label:'Asset Performance',  icon:'📈', color:'#f97316'},
   ];
 
   if(!isLoaded) return (
@@ -918,8 +918,8 @@ Respond ONLY as a JSON object with these keys:
             <img src="./logo.png" style={{width:'100%',height:'100%',objectFit:'cover'}} alt="P"/>
           </div>
           <div>
-            <div style={{fontSize:14,fontWeight:700,color:T.text,letterSpacing:'-.01em'}}>Portfolio Manager</div>
-            <div style={{fontSize:10,color:T.text3,marginTop:1}}>Arun Verma · v4.9.8</div>
+            <div style={{fontSize:14,fontWeight:700,color:T.text,letterSpacing:'-.01em'}}>Portfolio Manager Pro</div>
+            <div style={{fontSize:10,color:T.text3,marginTop:1}}>Arun Verma · v5.0.0</div>
           </div>
         </div>
 
@@ -1015,7 +1015,7 @@ Respond ONLY as a JSON object with these keys:
             <button onClick={()=>setShowSettings(v=>!v)} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:6,background:showSettings?T.accentBg:'transparent',border:'none',cursor:'pointer',width:'100%',color:showSettings?T.accent:T.text3,transition:'all .15s',fontSize:12}}>
               <Ic.Settings/> Settings
             </button>
-            <div style={{fontSize:9,color:T.text3,textAlign:'center',marginTop:8,letterSpacing:'.05em',opacity:0.6}}>VERSION 4.9.8</div>
+            <div style={{fontSize:9,color:T.text3,textAlign:'center',marginTop:8,letterSpacing:'.05em',opacity:0.6}}>VERSION 5.0.0</div>
             </div>
           </div>
         </div>

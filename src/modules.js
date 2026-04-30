@@ -1152,23 +1152,16 @@ export function NewsModule({T,holdings,onClose}) {
   );
 }
 
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── MODULE: HISTORICAL PORTFOLIO VALUE ────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
 // Auto-snapshots on every price refresh. Storage: pm_portfolio_history
 
 export function HistoryModule({T,history,setHistory,onClose}) {
-  const svgRef=useRef();
   const [hover,setHover]=useState(null);
 
   const data=useMemo(()=>history.filter(h=>h.inrVal>0).sort((a,b)=>a.date.localeCompare(b.date)),[history]);
-
-  const VW=700,VH=200,PAD={t:16,r:16,b:32,l:80};
-  const W=VW-PAD.l-PAD.r,H=VH-PAD.t-PAD.b;
-  const vals=data.map(d=>d.inrVal);
-  const minV=Math.min(...vals)*0.99,maxV=Math.max(...vals)*1.01,rangeV=(maxV-minV)||1;
-  const xOf=i=>PAD.l+(i/(data.length-1||1))*W;
-  const yOf=v=>PAD.t+H-((v-minV)/rangeV)*H;
 
   if(!data.length)return(
     <div style={{flex:1,overflowY:'auto',minHeight:0}}>
@@ -1179,8 +1172,6 @@ export function HistoryModule({T,history,setHistory,onClose}) {
     </div>
   );
 
-  const linePath=data.map((d,i)=>`${i===0?'M':'L'}${xOf(i).toFixed(1)},${yOf(d.inrVal).toFixed(1)}`).join(' ');
-  const areaPath=linePath+` L${xOf(data.length-1).toFixed(1)},${PAD.t+H} L${PAD.l},${PAD.t+H} Z`;
   const latest = data[data.length-1];
   const gain = latest.inrVal - (latest.inrInv || data[0].inrVal);
   const gainPct = latest.inrInv > 0 ? (gain / latest.inrInv) * 100 : 0;
@@ -1189,75 +1180,106 @@ export function HistoryModule({T,history,setHistory,onClose}) {
 
   return(
     <div style={{flex:1,overflowY:'auto',minHeight:0}}>
-      <div style={{padding:24,display:'flex',flexDirection:'column',gap:16}}>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:12}}>
+      <div style={{padding:'24px 32px 16px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
         <div>
-          <div style={{fontSize:20,fontWeight:700,color:T.text,marginBottom:4}}>Portfolio History</div>
-          <div style={{fontSize:13,color:T.text3}}>{data.length} daily snapshots</div>
+          <h2 style={{fontSize:22,fontWeight:800,color:T.text,letterSpacing:'-0.02em',marginBottom:4}}>Asset Performance Dashboard</h2>
+          <div style={{fontSize:13,color:T.text3}}>{data.length} historical snapshots recorded</div>
         </div>
-        <div style={{display:'flex',gap:16,alignItems:'center'}}>
-          <div style={{display:'flex',gap:16}}>
-            <div style={{textAlign:'right'}}><div style={{fontSize:11,color:T.text3}}>Stocks Value</div><div style={{fontSize:16,fontWeight:700,color:T.text}}>₹{(data[data.length-1].portfolioVal||0).toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
-            <div style={{textAlign:'right'}}><div style={{fontSize:11,color:T.text3}}>NPS Value</div><div style={{fontSize:16,fontWeight:700,color:T.accent}}>₹{(data[data.length-1].npsVal||0).toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
-            <div style={{textAlign:'right'}}><div style={{fontSize:11,color:T.text3}}>Gold Value</div><div style={{fontSize:16,fontWeight:700,color:'#FFD700'}}>₹{(data[data.length-1].goldVal||0).toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
-            <div style={{textAlign:'right'}}><div style={{fontSize:11,color:T.text3}}>Total Value</div><div style={{fontSize:18,fontWeight:700,color:T.text}}>₹{vals[vals.length-1].toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
-            <div style={{textAlign:'right'}}><div style={{fontSize:11,color:T.text3}}>Since Start</div><div style={{fontSize:18,fontWeight:700,color:lc}}>{gain>=0?'+':'−'}₹{Math.abs(gain).toLocaleString('en-IN',{maximumFractionDigits:0})} ({gainPct>=0?'+':''}{gainPct.toFixed(2)}%)</div></div>
-          </div>
-          {onClose&&<button onClick={onClose} style={{background:'none',border:`1px solid ${T.border}`,borderRadius:6,cursor:'pointer',color:T.text3,padding:'7px 8px',display:'flex',transition:'all .1s'}} onMouseEnter={e=>{e.currentTarget.style.borderColor=T.accent;e.currentTarget.style.color=T.accent;}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.text3;}}><Ic.X/></button>}
+        <div style={{display:'flex',gap:24}}>
+          <div style={{textAlign:'right'}}><div style={{fontSize:11,color:T.text3}}>Stocks Value</div><div style={{fontSize:18,fontWeight:700,color:T.text}}>₹{latest.portfolioVal?.toLocaleString('en-IN') || (latest.inrEquityVal + Math.round((latest.usdEquityVal||0)*(latest.usdInr||83.5))).toLocaleString('en-IN')}</div></div>
+          <div style={{textAlign:'right'}}><div style={{fontSize:11,color:T.text3}}>NPS Value</div><div style={{fontSize:18,fontWeight:700,color:T.success}}>₹{latest.npsVal?.toLocaleString('en-IN')}</div></div>
+          <div style={{textAlign:'right'}}><div style={{fontSize:11,color:T.text3}}>Gold Value</div><div style={{fontSize:18,fontWeight:700,color:'#FFD700'}}>₹{latest.goldVal?.toLocaleString('en-IN')}</div></div>
+          <div style={{textAlign:'right'}}><div style={{fontSize:11,color:T.text3}}>Total Value</div><div style={{fontSize:18,fontWeight:700,color:T.accent}}>₹{latest.inrVal.toLocaleString('en-IN')}</div></div>
+          <div style={{textAlign:'right'}}><div style={{fontSize:11,color:T.text3}}>Total P&L</div><div style={{fontSize:18,fontWeight:700,color:lc}}>{gain>=0?'+':'−'}₹{Math.abs(gain).toLocaleString('en-IN',{maximumFractionDigits:0})} ({gainPct>=0?'+':''}{gainPct.toFixed(2)}%)</div></div>
         </div>
+        <button onClick={onClose} style={{marginLeft:20,background:T.surface2,border:`1px solid ${T.border}`,color:T.text3,padding:8,borderRadius:8,cursor:'pointer'}}><Ic.X size={18}/></button>
       </div>
 
-      {/* Asset Breakdown Table */}
-      <div style={{background:T.surface2,borderRadius:12,border:`1px solid ${T.border}`,padding:'20px',boxShadow:'0 4px 20px rgba(0,0,0,0.1)'}}>
-        <div style={{fontSize:15,fontWeight:700,color:T.text,marginBottom:16,display:'flex',alignItems:'center',gap:8}}>
-          <Ic.TrendingUp size={18} color={T.accent}/> Asset Class Performance
+      <div style={{padding:'0 32px 32px',display:'flex',flexDirection:'column',gap:24}}>
+        {/* Asset Breakdown Table */}
+        <div style={{background:T.surface2,borderRadius:12,border:`1px solid ${T.border}`,padding:'20px',boxShadow:'0 4px 20px rgba(0,0,0,0.1)'}}>
+          <div style={{fontSize:15,fontWeight:700,color:T.text,marginBottom:16,display:'flex',alignItems:'center',gap:8}}>
+            <Ic.TrendingUp size={18} color={T.accent}/> Current Asset Allocation & Performance
+          </div>
+          <div style={{overflowX:'auto'}}>
+            <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+              <thead>
+                <tr style={{borderBottom:`2px solid ${T.border}`}}>
+                  <th style={{padding:'12px 16px',textAlign:'left',color:T.text3,fontSize:11,fontWeight:700,textTransform:'uppercase'}}>Asset Class</th>
+                  <th style={{padding:'12px 16px',textAlign:'right',color:T.text3,fontSize:11,fontWeight:700,textTransform:'uppercase'}}>Investment</th>
+                  <th style={{padding:'12px 16px',textAlign:'right',color:T.text3,fontSize:11,fontWeight:700,textTransform:'uppercase'}}>Current Value</th>
+                  <th style={{padding:'12px 16px',textAlign:'right',color:T.text3,fontSize:11,fontWeight:700,textTransform:'uppercase'}}>Gains</th>
+                  <th style={{padding:'12px 16px',textAlign:'right',color:T.text3,fontSize:11,fontWeight:700,textTransform:'uppercase'}}>Gains %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  { label: 'Indian Equity', cur: latest.inrEquityVal, inv: latest.inrEquityInv, symbol: '💹' },
+                  { label: 'US Equity',     cur: latest.usdEquityVal > 0 ? Math.round(latest.usdEquityVal * (latest.usdInr || 83.5)) : 0, inv: latest.usdEquityInv > 0 ? Math.round(latest.usdEquityInv * (latest.usdInr || 83.5)) : 0, symbol: '🌐' },
+                  { label: 'NPS Portfolio', cur: latest.npsVal, inv: latest.npsInv, symbol: '🛡️' },
+                  { label: 'Physical Gold', cur: latest.goldVal, inv: latest.goldInv, symbol: '🟡' },
+                ].map((row,idx) => {
+                  const rInv = row.inv || 0;
+                  const rCur = row.cur || 0;
+                  const gain = rCur - rInv;
+                  const pct = rInv > 0 ? (gain / rInv) * 100 : 0;
+                  const hasData = rInv > 0 || rCur > 0;
+                  return (
+                    <tr key={idx} style={{borderBottom:`1px solid ${T.border}`,transition:'background .1s'}} onMouseEnter={e=>e.currentTarget.style.background=T.surface3} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                      <td style={{padding:'16px'}}>
+                        <div style={{display:'flex',alignItems:'center',gap:12}}>
+                          <span style={{fontSize:18}}>{row.symbol}</span>
+                          <span style={{fontWeight:600,color:T.text}}>{row.label}</span>
+                        </div>
+                      </td>
+                      <td style={{padding:'16px',textAlign:'right',fontFamily:'monospace',fontSize:14,color:T.text2}}>{hasData ? fmt(rInv, 'INR') : '—'}</td>
+                      <td style={{padding:'16px',textAlign:'right',fontFamily:'monospace',fontSize:14,fontWeight:700,color:T.text}}>{hasData ? fmt(rCur, 'INR') : '—'}</td>
+                      <td style={{padding:'16px',textAlign:'right',fontFamily:'monospace',fontSize:14,fontWeight:700,color:gain>=0?T.success:T.danger}}>{hasData ? `${gain>=0?'+':'−'}₹${Math.abs(gain).toLocaleString('en-IN',{maximumFractionDigits:0})}` : '—'}</td>
+                      <td style={{padding:'16px',textAlign:'right',fontFamily:'monospace',fontSize:14,fontWeight:700,color:gain>=0?T.success:T.danger}}>{hasData ? `${pct>=0?'+':''}${pct.toFixed(2)}%` : '—'}</td>
+                    </tr>
+                  );
+                })}
+                <tr style={{background:T.surface3,fontWeight:800}}>
+                  <td style={{padding:'16px',fontSize:14,color:T.text}}>Total Portfolio</td>
+                  <td style={{padding:'16px',textAlign:'right',fontSize:15,color:T.text2}}>{fmt(latest.inrInv,'INR')}</td>
+                  <td style={{padding:'16px',textAlign:'right',fontSize:15,color:T.accent}}>{fmt(latest.inrVal,'INR')}</td>
+                  <td style={{padding:'16px',textAlign:'right',fontSize:15,color:gain>=0?T.success:T.danger}}>{gain>=0?'+':'−'}₹{Math.abs(gain).toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
+                  <td style={{padding:'16px',textAlign:'right',fontSize:15,color:gain>=0?T.success:T.danger}}>{gainPct>=0?'+':''}{gainPct.toFixed(2)}%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div style={{overflowX:'auto'}}>
-          <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
-            <thead>
-              <tr style={{borderBottom:`2px solid ${T.border}`}}>
-                <th style={{padding:'12px 16px',textAlign:'left',color:T.text3,fontSize:11,fontWeight:700,textTransform:'uppercase'}}>Asset Class</th>
-                <th style={{padding:'12px 16px',textAlign:'right',color:T.text3,fontSize:11,fontWeight:700,textTransform:'uppercase'}}>Investment</th>
-                <th style={{padding:'12px 16px',textAlign:'right',color:T.text3,fontSize:11,fontWeight:700,textTransform:'uppercase'}}>Current Value</th>
-                <th style={{padding:'12px 16px',textAlign:'right',color:T.text3,fontSize:11,fontWeight:700,textTransform:'uppercase'}}>Gains</th>
-                <th style={{padding:'12px 16px',textAlign:'right',color:T.text3,fontSize:11,fontWeight:700,textTransform:'uppercase'}}>Gains %</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[
-                { label: 'Indian Equity', cur: latest.inrEquityVal, inv: latest.inrEquityInv, symbol: '💹' },
-                { label: 'US Equity',     cur: latest.usdEquityVal > 0 ? Math.round(latest.usdEquityVal * (latest.usdInr || 83.5)) : 0, inv: latest.usdEquityInv > 0 ? Math.round(latest.usdEquityInv * (latest.usdInr || 83.5)) : 0, symbol: '🌐' },
-                { label: 'NPS Portfolio', cur: latest.npsVal, inv: latest.npsInv, symbol: '🛡️' },
-                { label: 'Physical Gold', cur: latest.goldVal, inv: latest.goldInv, symbol: '🟡' },
-              ].map((row,idx) => {
-                const gain = (row.cur||0) - (row.inv||0);
-                const pct = row.inv > 0 ? (gain / row.inv) * 100 : 0;
-                const hasData = row.inv > 0 || row.cur > 0;
-                return (
-                  <tr key={idx} style={{borderBottom:`1px solid ${T.border}`,transition:'background .1s'}} onMouseEnter={e=>e.currentTarget.style.background=T.surface3} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-                    <td style={{padding:'16px'}}>
-                      <div style={{display:'flex',alignItems:'center',gap:12}}>
-                        <span style={{fontSize:18}}>{row.symbol}</span>
-                        <span style={{fontWeight:600,color:T.text}}>{row.label}</span>
-                      </div>
-                    </td>
-                    <td style={{padding:'16px',textAlign:'right',fontFamily:'monospace',fontSize:14,color:T.text2}}>{hasData ? fmt(row.inv||0, 'INR') : '—'}</td>
-                    <td style={{padding:'16px',textAlign:'right',fontFamily:'monospace',fontSize:14,fontWeight:700,color:T.text}}>{hasData ? fmt(row.cur||0, 'INR') : '—'}</td>
-                    <td style={{padding:'16px',textAlign:'right',fontFamily:'monospace',fontSize:14,fontWeight:700,color:gain>=0?T.success:T.danger}}>{hasData ? `${gain>=0?'+':'−'}₹${Math.abs(gain).toLocaleString('en-IN',{maximumFractionDigits:0})}` : '—'}</td>
-                    <td style={{padding:'16px',textAlign:'right',fontFamily:'monospace',fontSize:14,fontWeight:700,color:gain>=0?T.success:T.danger}}>{hasData ? `${pct>=0?'+':''}${pct.toFixed(2)}%` : '—'}</td>
+
+        {/* Data table */}
+        <div style={{background:T.surface2,borderRadius:12,border:`1px solid ${T.border}`,overflow:'hidden',boxShadow:'0 4px 20px rgba(0,0,0,0.1)'}}>
+          <div style={{padding:'16px 20px',borderBottom:`1px solid ${T.border}`,display:'flex',alignItems:'center',gap:8}}>
+            <Ic.LineChart size={16} color={T.text2}/>
+            <span style={{fontSize:14,fontWeight:700,color:T.text}}>Historical Daily Performance Log</span>
+          </div>
+          <div style={{overflowX:'auto',maxHeight:450,overflowY:'auto'}}>
+            <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+              <thead style={{position:'sticky',top:0,zIndex:2}}>
+                <tr style={{background:T.surface3}}>
+                  {['Date','Total Value (₹)','Day Chg (₹)','Indian Equity','US Equity','NPS','Gold'].map(h=><th key={h} style={{padding:'12px 16px',textAlign:'right',color:T.text3,fontWeight:700,fontSize:10,textTransform:'uppercase',borderBottom:`1px solid ${T.border}`}}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>{[...data].reverse().map((d,i)=>{
+                const prev=data[data.length-2-i];
+                const inrChg=prev?d.inrVal-prev.inrVal:null;
+                const inInrVal = d.inrEquityVal || (d.portfolioVal - (Math.round((d.usdVal||0)*(d.usdInr||83.5))));
+                const usInrVal = (d.usdEquityVal > 0 ? Math.round(d.usdEquityVal * (d.usdInr || 83.5)) : 0) || Math.round((d.usdVal||0)*(d.usdInr||83.5));
+                return(
+                  <tr key={d.date} style={{background:i%2===0?T.surface2:T.surface3}} onMouseEnter={e=>e.currentTarget.style.background=T.surface4} onMouseLeave={e=>e.currentTarget.style.background=i%2===0?T.surface2:T.surface3}>
+                    <td style={{padding:'12px 16px',textAlign:'left',borderBottom:`1px solid ${T.border}`,color:T.text,fontWeight:600}}>{new Date(d.date).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}</td>
+                    <td style={{padding:'12px 16px',textAlign:'right',borderBottom:`1px solid ${T.border}`,fontWeight:700,color:T.cyan}}>₹{d.inrVal.toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
+                    <td style={{padding:'12px 16px',textAlign:'right',borderBottom:`1px solid ${T.border}`}}>{inrChg!=null?<span style={{fontWeight:700,color:inrChg>=0?T.success:T.danger}}>{inrChg>=0?'+':'−'}₹{Math.abs(inrChg).toLocaleString('en-IN',{maximumFractionDigits:0})}</span>:'—'}</td>
+                    <td style={{padding:'12px 16px',textAlign:'right',borderBottom:`1px solid ${T.border}`,color:T.text2}}>{inInrVal > 0 ? `₹${inInrVal.toLocaleString('en-IN',{maximumFractionDigits:0})}` : '—'}</td>
+                    <td style={{padding:'12px 16px',textAlign:'right',borderBottom:`1px solid ${T.border}`,color:T.text2}}>{usInrVal > 0 ? `₹${usInrVal.toLocaleString('en-IN',{maximumFractionDigits:0})}` : '—'}</td>
+                    <td style={{padding:'12px 16px',textAlign:'right',borderBottom:`1px solid ${T.border}`,color:T.text2}}>{d.npsVal > 0 ? `₹${d.npsVal.toLocaleString('en-IN',{maximumFractionDigits:0})}` : '—'}</td>
+                    <td style={{padding:'12px 16px',textAlign:'right',borderBottom:`1px solid ${T.border}`,color:T.text2}}>{d.goldVal > 0 ? `₹${d.goldVal.toLocaleString('en-IN',{maximumFractionDigits:0})}` : '—'}</td>
                   </tr>
                 );
-              })}
-              <tr style={{background:T.surface3,fontWeight:800}}>
-                <td style={{padding:'16px',fontSize:14,color:T.text}}>Total Portfolio</td>
-                <td style={{padding:'16px',textAlign:'right',fontSize:15,color:T.text2}}>{fmt(latest.inrInv,'INR')}</td>
-                <td style={{padding:'16px',textAlign:'right',fontSize:15,color:T.accent}}>{fmt(latest.inrVal,'INR')}</td>
-                <td style={{padding:'16px',textAlign:'right',fontSize:15,color:gain>=0?T.success:T.danger}}>{gain>=0?'+':'−'}₹{Math.abs(gain).toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
-                <td style={{padding:'16px',textAlign:'right',fontSize:15,color:gain>=0?T.success:T.danger}}>{gainPct>=0?'+':''}{gainPct.toFixed(2)}%</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
       </div>
 
       {/* Data table */}

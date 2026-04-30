@@ -1,6 +1,6 @@
 {
-  "name": "stock-portfolio-desktop",
-  "version": "4.9.8",
+  "name": "portfolio-manager-pro",
+  "version": "5.0.0",
   "description": "Stock Portfolio Monitor for Windows 11",
   "author": "Arun Verma <arunmcops@gmail.com>",
   "main": "main.js",
