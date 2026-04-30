@@ -1264,7 +1264,9 @@ export function HistoryModule({T,history,setHistory,onClose}) {
               </thead>
               <tbody>{[...data].reverse().map((d,i)=>{
                 const prev=data[data.length-2-i];
-                const inrChg=prev?d.inrVal-prev.inrVal:null;
+                const curPnl = d.inrVal - (d.inrInv || 0);
+                const prevPnl = prev ? (prev.inrVal - (prev.inrInv || 0)) : null;
+                const inrChg = prevPnl != null ? curPnl - prevPnl : null;
                 const inInrVal = d.inrEquityVal || (d.portfolioVal - (Math.round((d.usdVal||0)*(d.usdInr||83.5))));
                 const usInrVal = (d.usdEquityVal > 0 ? Math.round(d.usdEquityVal * (d.usdInr || 83.5)) : 0) || Math.round((d.usdVal||0)*(d.usdInr||83.5));
                 return(
