@@ -1207,24 +1207,57 @@ export function HistoryModule({T,history,setHistory,onClose}) {
         </div>
       </div>
 
-      <div style={{background:T.surface2,borderRadius:8,border:`1px solid ${T.border}`,padding:'16px 12px'}}>
-        <svg ref={svgRef} viewBox={`0 0 ${VW} ${VH}`} preserveAspectRatio="xMidYMid meet" style={{width:'100%',height:'auto',display:'block',cursor:'crosshair'}} onMouseMove={e=>{if(!svgRef.current)return;const rect=svgRef.current.getBoundingClientRect();const sx=((e.clientX-rect.left)/rect.width)*VW;const i=Math.max(0,Math.min(data.length-1,Math.round(((sx-PAD.l)/W)*(data.length-1))));setHover(i);}} onMouseLeave={()=>setHover(null)}>
-          <defs><linearGradient id="hg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={lc} stopOpacity="0.2"/><stop offset="100%" stopColor={lc} stopOpacity="0"/></linearGradient></defs>
-          {[0.25,0.5,0.75,1].map(f=>{const v=minV+rangeV*f;return(<g key={f}><line x1={PAD.l} y1={yOf(v)} x2={PAD.l+W} y2={yOf(v)} stroke={T.border} strokeWidth="0.5"/><text x={PAD.l-4} y={yOf(v)+4} fontSize={8} fill={T.text3} fontFamily="inherit" textAnchor="end">₹{(v/1e5).toFixed(1)}L</text></g>);})}
-          <path d={areaPath} fill="url(#hg)"/>
-          <path d={linePath} fill="none" stroke={lc} strokeWidth="2"/>
-          {data.filter((_,i)=>i%Math.max(1,Math.floor(data.length/7))===0).map((d,i)=>{const idx=data.indexOf(d);return<text key={i} x={xOf(idx)} y={PAD.t+H+14} fontSize={8} fill={T.text3} fontFamily="inherit" textAnchor="middle">{new Date(d.date).toLocaleDateString('en-IN',{day:'2-digit',month:'short'})}</text>;})}
-          {hover!==null&&data[hover]&&(
-            <g>
-              <line x1={xOf(hover)} y1={PAD.t} x2={xOf(hover)} y2={PAD.t+H} stroke={T.border2} strokeWidth="0.8"/>
-              <circle cx={xOf(hover)} cy={yOf(data[hover].inrVal)} r={4} fill={lc} stroke={T.surface} strokeWidth="2"/>
-              <rect x={Math.min(xOf(hover)+8,VW-140)} y={PAD.t+4} width={130} height={50} rx={4} fill={T.surface2} stroke={T.border2} strokeWidth="0.8"/>
-              <text x={Math.min(xOf(hover)+14,VW-134)} y={PAD.t+18} fontSize={9} fill={T.text3} fontFamily="inherit">{data[hover].date}</text>
-              <text x={Math.min(xOf(hover)+14,VW-134)} y={PAD.t+34} fontSize={12} fill={T.text} fontFamily="inherit" fontWeight="700">₹{data[hover].inrVal.toLocaleString('en-IN',{maximumFractionDigits:0})}</text>
-              {data[hover].usdVal>0&&<text x={Math.min(xOf(hover)+14,VW-134)} y={PAD.t+47} fontSize={9} fill={T.text3} fontFamily="inherit">+ ${data[hover].usdVal.toLocaleString('en-US',{maximumFractionDigits:0})} US</text>}
-            </g>
-          )}
-        </svg>
+      {/* Asset Breakdown Table */}
+      <div style={{background:T.surface2,borderRadius:12,border:`1px solid ${T.border}`,padding:'20px',boxShadow:'0 4px 20px rgba(0,0,0,0.1)'}}>
+        <div style={{fontSize:15,fontWeight:700,color:T.text,marginBottom:16,display:'flex',alignItems:'center',gap:8}}>
+          <Ic.TrendingUp size={18} color={T.accent}/> Asset Class Performance
+        </div>
+        <div style={{overflowX:'auto'}}>
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+            <thead>
+              <tr style={{borderBottom:`2px solid ${T.border}`}}>
+                <th style={{padding:'12px 16px',textAlign:'left',color:T.text3,fontSize:11,fontWeight:700,textTransform:'uppercase'}}>Asset Class</th>
+                <th style={{padding:'12px 16px',textAlign:'right',color:T.text3,fontSize:11,fontWeight:700,textTransform:'uppercase'}}>Investment</th>
+                <th style={{padding:'12px 16px',textAlign:'right',color:T.text3,fontSize:11,fontWeight:700,textTransform:'uppercase'}}>Current Value</th>
+                <th style={{padding:'12px 16px',textAlign:'right',color:T.text3,fontSize:11,fontWeight:700,textTransform:'uppercase'}}>Gains</th>
+                <th style={{padding:'12px 16px',textAlign:'right',color:T.text3,fontSize:11,fontWeight:700,textTransform:'uppercase'}}>Gains %</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                { label: 'Indian Equity', cur: latest.inrEquityVal, inv: latest.inrEquityInv, symbol: '💹' },
+                { label: 'US Equity',     cur: latest.usdEquityVal > 0 ? Math.round(latest.usdEquityVal * (latest.usdInr || 83.5)) : 0, inv: latest.usdEquityInv > 0 ? Math.round(latest.usdEquityInv * (latest.usdInr || 83.5)) : 0, symbol: '🌐' },
+                { label: 'NPS Portfolio', cur: latest.npsVal, inv: latest.npsInv, symbol: '🛡️' },
+                { label: 'Physical Gold', cur: latest.goldVal, inv: latest.goldInv, symbol: '🟡' },
+              ].map((row,idx) => {
+                const gain = (row.cur||0) - (row.inv||0);
+                const pct = row.inv > 0 ? (gain / row.inv) * 100 : 0;
+                const hasData = row.inv > 0 || row.cur > 0;
+                return (
+                  <tr key={idx} style={{borderBottom:`1px solid ${T.border}`,transition:'background .1s'}} onMouseEnter={e=>e.currentTarget.style.background=T.surface3} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                    <td style={{padding:'16px'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:12}}>
+                        <span style={{fontSize:18}}>{row.symbol}</span>
+                        <span style={{fontWeight:600,color:T.text}}>{row.label}</span>
+                      </div>
+                    </td>
+                    <td style={{padding:'16px',textAlign:'right',fontFamily:'monospace',fontSize:14,color:T.text2}}>{hasData ? fmt(row.inv||0, 'INR') : '—'}</td>
+                    <td style={{padding:'16px',textAlign:'right',fontFamily:'monospace',fontSize:14,fontWeight:700,color:T.text}}>{hasData ? fmt(row.cur||0, 'INR') : '—'}</td>
+                    <td style={{padding:'16px',textAlign:'right',fontFamily:'monospace',fontSize:14,fontWeight:700,color:gain>=0?T.success:T.danger}}>{hasData ? `${gain>=0?'+':'−'}₹${Math.abs(gain).toLocaleString('en-IN',{maximumFractionDigits:0})}` : '—'}</td>
+                    <td style={{padding:'16px',textAlign:'right',fontFamily:'monospace',fontSize:14,fontWeight:700,color:gain>=0?T.success:T.danger}}>{hasData ? `${pct>=0?'+':''}${pct.toFixed(2)}%` : '—'}</td>
+                  </tr>
+                );
+              })}
+              <tr style={{background:T.surface3,fontWeight:800}}>
+                <td style={{padding:'16px',fontSize:14,color:T.text}}>Total Portfolio</td>
+                <td style={{padding:'16px',textAlign:'right',fontSize:15,color:T.text2}}>{fmt(latest.inrInv,'INR')}</td>
+                <td style={{padding:'16px',textAlign:'right',fontSize:15,color:T.accent}}>{fmt(latest.inrVal,'INR')}</td>
+                <td style={{padding:'16px',textAlign:'right',fontSize:15,color:gain>=0?T.success:T.danger}}>{gain>=0?'+':'−'}₹{Math.abs(gain).toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
+                <td style={{padding:'16px',textAlign:'right',fontSize:15,color:gain>=0?T.success:T.danger}}>{gainPct>=0?'+':''}{gainPct.toFixed(2)}%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Data table */}

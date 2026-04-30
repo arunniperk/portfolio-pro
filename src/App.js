@@ -291,11 +291,33 @@ const GoldModule      = lazy(() => import('./modules').then(m => ({ default: m.G
 function AppInner() {
   const [isLoaded,setIsLoaded]=useState(false);
   const [isLocked,setIsLocked]=useState(false);
-  const [pinInput,setPinInput]=useState('');
   const [tweaks,setTweaks]=useState(() => {
     const saved = getItemSync('pm_tweaks');
     return saved ? {...TWEAK_DEF, ...JSON.parse(saved)} : TWEAK_DEF;
   });
+  const [pinInput,setPinInput]=useState('');
+
+  useEffect(() => {
+    if (!isLocked) return;
+    const handleKD = (e) => {
+      if (e.key >= '0' && e.key <= '9') {
+        const n = e.key;
+        setPinInput(prev => {
+          if (prev.length < 4) {
+            const ni = prev + n;
+            if (ni === tweaks.pin) { setIsLocked(false); return ''; }
+            else if (ni.length === 4) { alert("Incorrect PIN"); return ''; }
+            return ni;
+          }
+          return prev;
+        });
+      } else if (e.key === 'Backspace') {
+        setPinInput(p => p.slice(0,-1));
+      }
+    };
+    window.addEventListener('keydown', handleKD);
+    return () => window.removeEventListener('keydown', handleKD);
+  }, [isLocked, tweaks.pin]);
   const [portfolios,setPortfolios]=useState(() => {
     const saved = getItemSync('pm_portfolios');
     return saved ? JSON.parse(saved) : DEF_PF;
@@ -568,10 +590,10 @@ function AppInner() {
     if(!isLoaded || !portfolios.length) return;
     
     // Aggregate total value across all portfolios + NPS
-    let totalInrVal = 0;
-    let totalInrInv = 0;
-    let totalUsdVal = 0;
-    let totalUsdInv = 0;
+    let totalInrEquityVal = 0;
+    let totalInrEquityInv = 0;
+    let totalUsdEquityVal = 0;
+    let totalUsdEquityInv = 0;
 
     portfolios.forEach(p => {
       p.holdings.forEach(h => {
@@ -580,16 +602,17 @@ function AppInner() {
         const curVal = h.qty * pr.current;
         const invVal = h.qty * h.buyPrice;
         if(pr.currency === 'USD') {
-          totalUsdVal += curVal;
-          totalUsdInv += invVal;
-          totalInrVal += curVal * (usdInr || 83.5);
-          totalInrInv += invVal * (usdInr || 83.5);
+          totalUsdEquityVal += curVal;
+          totalUsdEquityInv += invVal;
         } else {
-          totalInrVal += curVal;
-          totalInrInv += invVal;
+          totalInrEquityVal += curVal;
+          totalInrEquityInv += invVal;
         }
       });
     });
+
+    const totalInrVal = Math.round(totalInrEquityVal + (totalUsdEquityVal * (usdInr || 83.5)));
+    const totalInrInv = Math.round(totalInrEquityInv + (totalUsdEquityInv * (usdInr || 83.5)));
 
     // Add NPS values
     const npsVal = (npsHoldings||[]).reduce((a,h)=>{
@@ -615,9 +638,33 @@ function AppInner() {
         const dVal = Math.abs(existing.inrVal - finalInrVal) / Math.max(existing.inrVal, 1);
         const dInv = Math.abs((existing.inrInv||0) - finalInrInv) / Math.max(existing.inrInv||1, 1);
         if(dVal < 0.0005 && dInv < 0.0005) return prev; 
-        return prev.map(p => p.date === today ? { ...p, inrVal: finalInrVal, inrInv: finalInrInv, npsVal: Math.round(npsVal), goldVal: Math.round(goldVal), portfolioVal: Math.round(totalInrVal), usdVal: Math.round(totalUsdVal), usdInv: Math.round(totalUsdInv) } : p);
+        return prev.map(p => p.date === today ? { 
+          ...p, 
+          inrVal: finalInrVal, 
+          inrInv: finalInrInv, 
+          npsVal: Math.round(npsVal), 
+          npsInv: Math.round(npsInv),
+          goldVal: Math.round(goldVal), 
+          goldInv: Math.round(goldInv),
+          inrEquityVal: Math.round(totalInrEquityVal),
+          inrEquityInv: Math.round(totalInrEquityInv),
+          usdEquityVal: Math.round(totalUsdEquityVal),
+          usdEquityInv: Math.round(totalUsdEquityInv)
+        } : p);
       }
-      return [...prev, { date: today, inrVal: finalInrVal, inrInv: finalInrInv, npsVal: Math.round(npsVal), goldVal: Math.round(goldVal), portfolioVal: Math.round(totalInrVal), usdVal: Math.round(totalUsdVal), usdInv: Math.round(totalUsdInv) }].slice(-365);
+      return [...prev, { 
+        date: today, 
+        inrVal: finalInrVal, 
+        inrInv: finalInrInv, 
+        npsVal: Math.round(npsVal), 
+        npsInv: Math.round(npsInv),
+        goldVal: Math.round(goldVal), 
+        goldInv: Math.round(goldInv),
+        inrEquityVal: Math.round(totalInrEquityVal),
+        inrEquityInv: Math.round(totalInrEquityInv),
+        usdEquityVal: Math.round(totalUsdEquityVal),
+        usdEquityInv: Math.round(totalUsdEquityInv)
+      }].slice(-365);
     });
   }, [prices, npsHoldings, navs, usdInr, portfolios, isLoaded]);
   useEffect(()=>{
@@ -872,7 +919,7 @@ Respond ONLY as a JSON object with these keys:
           </div>
           <div>
             <div style={{fontSize:14,fontWeight:700,color:T.text,letterSpacing:'-.01em'}}>Portfolio Manager</div>
-            <div style={{fontSize:10,color:T.text3,marginTop:1}}>Arun Verma · v4.9.6</div>
+            <div style={{fontSize:10,color:T.text3,marginTop:1}}>Arun Verma · v4.9.7</div>
           </div>
         </div>
 
@@ -968,7 +1015,7 @@ Respond ONLY as a JSON object with these keys:
             <button onClick={()=>setShowSettings(v=>!v)} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:6,background:showSettings?T.accentBg:'transparent',border:'none',cursor:'pointer',width:'100%',color:showSettings?T.accent:T.text3,transition:'all .15s',fontSize:12}}>
               <Ic.Settings/> Settings
             </button>
-            <div style={{fontSize:9,color:T.text3,textAlign:'center',marginTop:8,letterSpacing:'.05em',opacity:0.6}}>VERSION 4.9.6</div>
+            <div style={{fontSize:9,color:T.text3,textAlign:'center',marginTop:8,letterSpacing:'.05em',opacity:0.6}}>VERSION 4.9.7</div>
             </div>
           </div>
         </div>
