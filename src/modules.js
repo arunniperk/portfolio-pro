@@ -1198,6 +1198,7 @@ export function HistoryModule({T,history,setHistory,onClose}) {
           <div style={{display:'flex',gap:16}}>
             <div style={{textAlign:'right'}}><div style={{fontSize:11,color:T.text3}}>Stocks Value</div><div style={{fontSize:16,fontWeight:700,color:T.text}}>₹{(data[data.length-1].portfolioVal||0).toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
             <div style={{textAlign:'right'}}><div style={{fontSize:11,color:T.text3}}>NPS Value</div><div style={{fontSize:16,fontWeight:700,color:T.accent}}>₹{(data[data.length-1].npsVal||0).toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
+            <div style={{textAlign:'right'}}><div style={{fontSize:11,color:T.text3}}>Gold Value</div><div style={{fontSize:16,fontWeight:700,color:'#FFD700'}}>₹{(data[data.length-1].goldVal||0).toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
             <div style={{textAlign:'right'}}><div style={{fontSize:11,color:T.text3}}>Total Value</div><div style={{fontSize:18,fontWeight:700,color:T.text}}>₹{vals[vals.length-1].toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
             <div style={{textAlign:'right'}}><div style={{fontSize:11,color:T.text3}}>Since Start</div><div style={{fontSize:18,fontWeight:700,color:lc}}>{gain>=0?'+':'−'}₹{Math.abs(gain).toLocaleString('en-IN',{maximumFractionDigits:0})} ({gainPct>=0?'+':''}{gainPct.toFixed(2)}%)</div></div>
           </div>
