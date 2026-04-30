@@ -280,13 +280,17 @@ function BottomNav({activeId, activeModule, onSwitch, T, NAV, MOD_NAV}) {
 const NotesModule     = lazy(() => import('./modules').then(m => ({ default: m.NotesModule })));
 const AlertsModule    = lazy(() => import('./modules').then(m => ({ default: m.AlertsModule })));
 const SectorModule    = lazy(() => import('./modules').then(m => ({ default: m.SectorModule })));
-const BenchmarkModule = lazy(() => import('./modules').then(m => ({ default: m.BenchmarkModule })));
+// [BenchmarkModule Lazy Import Removed]
+
 const NewsModule      = lazy(() => import('./modules').then(m => ({ default: m.NewsModule })));
 const HistoryModule   = lazy(() => import('./modules').then(m => ({ default: m.HistoryModule })));
 const WatchlistModule = lazy(() => import('./modules').then(m => ({ default: m.WatchlistModule })));
 const WatchlistHistoryModule = lazy(() => import('./modules').then(m => ({ default: m.WatchlistHistoryModule })));
 const NPSModule       = lazy(() => import('./modules').then(m => ({ default: m.NPSModule })));
 const GoldModule      = lazy(() => import('./modules').then(m => ({ default: m.GoldModule })));
+const MFModule        = lazy(() => import('./modules').then(m => ({ default: m.MFModule })));
+const PPFModule       = lazy(() => import('./modules').then(m => ({ default: m.PPFModule })));
+const EFModule        = lazy(() => import('./modules').then(m => ({ default: m.EFModule })));
 
 function AppInner() {
   const [isLoaded,setIsLoaded]=useState(false);
@@ -371,6 +375,18 @@ function AppInner() {
     const saved = getItemSync('pm_nps_growth');
     return saved ? parseFloat(saved) : 7;
   });
+  const [mfHoldings,setMfHoldings]=useState(() => {
+    const saved = getItemSync('pm_mf');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [ppfHoldings,setPpfHoldings]=useState(() => {
+    const saved = getItemSync('pm_ppf');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [emergencyFund,setEmergencyFund]=useState(() => {
+    const saved = getItemSync('pm_emergency');
+    return saved ? JSON.parse(saved) : [];
+  });
 
   useEffect(() => {
     // Run after initial mount to keep the UI thread responsive
@@ -443,6 +459,21 @@ function AppInner() {
       goldHoldings.forEach(h => {
         csvLines.push(`GOLD_HOLDING,${h.date},${h.grams},${h.invVal},${h.note||''}`);
       });
+      // Mutual Funds
+      mfHoldings.forEach(h => {
+        const n = h.name.includes(',') ? `"${h.name}"` : h.name;
+        csvLines.push(`MF_HOLDING,${h.schemeCode},${n},${h.units},${h.invVal},${h.date}`);
+      });
+      // PPF
+      ppfHoldings.forEach(h => {
+        csvLines.push(`PPF_CONTRIBUTION,${h.date},Contribution,${h.amount},,`);
+      });
+      // Emergency Fund
+      emergencyFund.forEach(h => {
+        const b = h.bank.includes(',') ? `"${h.bank}"` : h.bank;
+        const hl = (h.holder||'—').includes(',') ? `"${h.holder}"` : (h.holder||'—');
+        csvLines.push(`EMERGENCY_FUND,${b},${hl},${h.amount},,`);
+      });
       
       const csv = csvLines.join('\n');
       const filename = `Portfolio_AutoBackup_${new Date().toISOString().slice(0,10)}_${Date.now()}.csv`;
@@ -508,6 +539,9 @@ function AppInner() {
   useEffect(()=>{if(isLoaded)setItemSync('pm_nps_growth',JSON.stringify(npsGrowth));},[npsGrowth,isLoaded]);
   useEffect(()=>{if(isLoaded)setItemSync('pm_gold',JSON.stringify(goldHoldings));},[goldHoldings,isLoaded]);
   useEffect(()=>{if(isLoaded)setItemSync('pm_gold_api_key',goldApiKey);},[goldApiKey,isLoaded]);
+  useEffect(()=>{if(isLoaded)setItemSync('pm_mf',JSON.stringify(mfHoldings));},[mfHoldings,isLoaded]);
+  useEffect(()=>{if(isLoaded)setItemSync('pm_ppf',JSON.stringify(ppfHoldings));},[ppfHoldings,isLoaded]);
+  useEffect(()=>{if(isLoaded)setItemSync('pm_emergency',JSON.stringify(emergencyFund));},[emergencyFund,isLoaded]);
   useEffect(()=>{if(window.electronAPI?.onUpdateAvailable)window.electronAPI.onUpdateAvailable(()=>setUpdateAvail(true));},[]);
   const fetchPrices=useCallback(async()=>{
     const pFetch = async (url, options={}) => {
@@ -579,6 +613,17 @@ function AppInner() {
       }
     } catch(e) { console.error("Gold fetch error", e); }
 
+    // Fetch Mutual Fund Prices
+    const mfCodes = Array.from(new Set((mfHoldings||[]).map(h => h.schemeCode).filter(Boolean)));
+    await Promise.all(mfCodes.map(async code => {
+      try {
+        const json = await pFetch(`https://api.mfapi.in/mf/${code}`);
+        if(json?.data?.[0]?.nav) {
+          out[`MF_${code}`] = { current: parseFloat(json.data[0].nav), currency: 'INR' };
+        }
+      } catch {}
+    }));
+
     setPrices(prev=>{
       const merged={...prev};
       let anyNew=false;
@@ -591,7 +636,7 @@ function AppInner() {
       return anyNew ? merged : prev;
     });
     setLastUpdated(new Date());setLoading(false);
-  },[portfolios]);
+  },[portfolios, mfHoldings]);
 
   // Global background snapshot logic
   useEffect(() => {
@@ -630,14 +675,29 @@ function AppInner() {
     },0);
     const npsInv = (npsHoldings||[]).reduce((a,h)=>a+(parseFloat(h.tInv)||0),0);
     
-    // Add Gold values (including 3% GST as per user requirement for final value)
+    // Add Gold values
     const goldPrice = prices['PHYSICAL_GOLD']?.current || 0;
     const totalGoldGrams = (goldHoldings||[]).reduce((a,h)=>a+(parseFloat(h.grams)||0),0);
-    const goldVal = Math.round(totalGoldGrams * goldPrice * 1.03); // +3% GST
+    const goldVal = Math.round(totalGoldGrams * goldPrice * 1.03);
     const goldInv = (goldHoldings||[]).reduce((a,h)=>a+(parseFloat(h.invVal)||0),0);
 
-    const finalInrVal = Math.round(totalInrVal + npsVal + goldVal);
-    const finalInrInv = Math.round(totalInrInv + npsInv + goldInv);
+    // Add Mutual Fund values
+    const mfVal = (mfHoldings||[]).reduce((a,h)=>{
+      const pr = prices[`MF_${h.schemeCode}`];
+      return a + ((parseFloat(h.units)||0) * (pr?.current||0));
+    },0);
+    const mfInv = (mfHoldings||[]).reduce((a,h)=>a+(parseFloat(h.invVal)||0),0);
+
+    // Add PPF values
+    const ppfVal = (ppfHoldings||[]).reduce((a,h)=>a+(parseFloat(h.amount)||0),0);
+    const ppfInv = (ppfHoldings||[]).reduce((a,h)=>a+(h.isInterest?0:(parseFloat(h.amount)||0)),0);
+
+    // Add Emergency Fund values
+    const efVal = (emergencyFund||[]).reduce((a,h)=>a+(parseFloat(h.amount)||0),0);
+    const efInv = efVal;
+
+    const finalInrVal = Math.round(totalInrVal + npsVal + goldVal + mfVal + ppfVal);
+    const finalInrInv = Math.round(totalInrInv + npsInv + goldInv + mfInv + ppfInv);
     const today = new Date().toISOString().slice(0,10);
 
     setHistory(prev => {
@@ -654,6 +714,12 @@ function AppInner() {
           npsInv: Math.round(npsInv),
           goldVal: Math.round(goldVal), 
           goldInv: Math.round(goldInv),
+          mfVal: Math.round(mfVal),
+          mfInv: Math.round(mfInv),
+          ppfVal: Math.round(ppfVal),
+          ppfInv: Math.round(ppfInv),
+          efVal: Math.round(efVal),
+          efInv: Math.round(efInv),
           inrEquityVal: Math.round(totalInrEquityVal),
           inrEquityInv: Math.round(totalInrEquityInv),
           usdEquityVal: Math.round(totalUsdEquityVal),
@@ -668,6 +734,12 @@ function AppInner() {
         npsInv: Math.round(npsInv),
         goldVal: Math.round(goldVal), 
         goldInv: Math.round(goldInv),
+        mfVal: Math.round(mfVal),
+        mfInv: Math.round(mfInv),
+        ppfVal: Math.round(ppfVal),
+        ppfInv: Math.round(ppfInv),
+        efVal: Math.round(efVal),
+        efInv: Math.round(efInv),
         inrEquityVal: Math.round(totalInrEquityVal),
         inrEquityInv: Math.round(totalInrEquityInv),
         usdEquityVal: Math.round(totalUsdEquityVal),
@@ -853,7 +925,11 @@ Respond ONLY as a JSON object with these keys:
     return a + (cur - (h.invVal||0));
   }, 0);
   const totalInvBaseline = 8567549; // Fixed baseline as requested
-  const totalActualGain = globalGainIN + (globalGainUS * (usdInr||83.5)) + npsGain + goldGain;
+  const mfGain = (mfHoldings||[]).reduce((a,h)=>{
+    const pr = prices[`MF_${h.schemeCode}`]?.current || 0;
+    return a + ((h.units * pr) - (h.invVal||0));
+  }, 0);
+  const totalActualGain = globalGainIN + (globalGainUS * (usdInr||83.5)) + npsGain + goldGain + mfGain;
   const totalPortfolioGain = totalActualGain;
   // Override totalGain if needed, but we'll use the calculated one
   const activeStock=mainTab.startsWith('stock:')?mainTab.slice(6):null;
@@ -902,10 +978,13 @@ Respond ONLY as a JSON object with these keys:
 
   // Left sidebar nav items
   const NAV=[
-    {id:'IN',  label:'Indian Equity', icon:<Ic.India/>, flag:'💹', color:T.inColor},
-    {id:'US',  label:'US Equity',     icon:<Ic.US/>,    flag:'🌐', color:T.usColor},
-    {id:'NPS', label:'NPS Portfolio', icon:'🛡️',       flag:'🛡️', color:T.accent},
-    {id:'GOLD',label:'Physical Gold', icon:'🟡',       flag:'🟡', color:'#FFD700'},
+    {id:'IN',   label:'Indian Equity',  icon:<Ic.India/>, flag:'💹', color:T.inColor},
+    {id:'US',   label:'US Equity',      icon:<Ic.US/>,    flag:'🌐', color:T.usColor},
+    {id:'MF',   label:'Mutual Funds',   icon:'📦',       flag:'📦', color:'#10b981'},
+    {id:'NPS',  label:'NPS Portfolio',  icon:'🛡️',       flag:'🛡️', color:T.accent},
+    {id:'PPF',  label:'PPF Tracker',    icon:'🏦',       flag:'🏦', color:'#f59e0b'},
+    {id:'GOLD', label:'Physical Gold',  icon:'🟡',       flag:'🟡', color:'#FFD700'},
+    {id:'EF',   label:'Emergency Fund', icon:'🆘',       flag:'🆘', color:'#ef4444'},
   ];
   const MOD_NAV=[
     {id:'watchlist', label:'Watchlist',  icon:'👁', color:'#a855f7'},
@@ -913,7 +992,7 @@ Respond ONLY as a JSON object with these keys:
     {id:'alerts',    label:'Alerts',   icon:'🔔', color:'#ef4444'},
     {id:'sectors',   label:'Sectors',  icon:'🏭', color:'#6366f1'},
     {id:'news',      label:'News',     icon:'📰', color:'#8b5cf6'},
-    {id:'benchmark', label:'Benchmark',icon:'📊', color:'#00b4d8'},
+
     {id:'history',   label:'Asset Performance',  icon:'📈', color:'#f97316'},
   ];
 
@@ -949,7 +1028,7 @@ Respond ONLY as a JSON object with these keys:
           </div>
           <div>
             <div style={{fontSize:14,fontWeight:700,color:T.text,letterSpacing:'-.01em'}}>Portfolio Manager Pro</div>
-            <div style={{fontSize:10,color:T.text3,marginTop:1}}>Arun Verma · v5.0.0</div>
+            <div style={{fontSize:10,color:T.text3,marginTop:1}}>Arun Verma · v6.0.0</div>
           </div>
         </div>
 
@@ -1049,7 +1128,7 @@ Respond ONLY as a JSON object with these keys:
             <button onClick={()=>setShowSettings(v=>!v)} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:6,background:showSettings?T.accentBg:'transparent',border:'none',cursor:'pointer',width:'100%',color:showSettings?T.accent:T.text3,transition:'all .15s',fontSize:12}}>
               <Ic.Settings/> Settings
             </button>
-            <div style={{fontSize:9,color:T.text3,textAlign:'center',marginTop:8,letterSpacing:'.05em',opacity:0.6}}>VERSION 5.0.0</div>
+            <div style={{fontSize:9,color:T.text3,textAlign:'center',marginTop:8,letterSpacing:'.05em',opacity:0.6}}>VERSION 6.0.0</div>
             </div>
           </div>
         </div>
@@ -1062,7 +1141,7 @@ Respond ONLY as a JSON object with these keys:
             {activeModule==='alerts'&&<AlertsModule T={T} prices={prices} holdings={uniqueHoldings} alerts={alerts} setAlerts={setAlerts} onClose={()=>setActiveModule(null)}/>}
             {activeModule==='sectors'&&<SectorModule T={T} rows={allRows} prices={prices} usdInr={usdInr} onClose={()=>setActiveModule(null)}/>}
             {activeModule==='news'&&<NewsModule T={T} holdings={uniqueHoldings} onClose={()=>setActiveModule(null)}/>}
-            {activeModule==='benchmark'&&<BenchmarkModule T={T} rows={rows} inRows={inRows} usRows={usRows} usdInr={usdInr} history={history} onClose={()=>setActiveModule(null)}/>}
+
             {activeModule==='history'&&<HistoryModule T={T} history={history} setHistory={setHistory} onClose={()=>setActiveModule(null)}/>}
           </Suspense>
           {!activeModule&&activeStock?(
@@ -1078,11 +1157,17 @@ Respond ONLY as a JSON object with these keys:
                   {mainTab==='US'&&<Section title="US Equity" flag="🇺🇸" accent={T.usColor} rows={usRows} currency="USD" usdInr={usdInr} onImportCSV={()=>setImportModal('US')} onRowClick={openStockTab} {...sharedProps}/>}
                   {mainTab==='NPS'&&<Suspense fallback={<div style={{padding:40,color:T.text3}}>Loading NPS...</div>}><NPSModule T={T} holdings={npsHoldings} setHoldings={setNpsHoldings} navs={navs} setNavs={setNavs} growth={npsGrowth} setGrowth={setNpsGrowth} onClose={()=>setMainTab('IN')}/></Suspense>}
                   {mainTab==='GOLD'&&<Suspense fallback={<div style={{padding:40,color:T.text3}}>Loading Gold...</div>}><GoldModule T={T} holdings={goldHoldings} setHoldings={setGoldHoldings} prices={prices} onClose={()=>setMainTab('IN')}/></Suspense>}
+                  {mainTab==='MF'&&<Suspense fallback={<div style={{padding:40,color:T.text3}}>Loading Mutual Funds...</div>}><MFModule T={T} holdings={mfHoldings} setHoldings={setMfHoldings} prices={prices} onClose={()=>setMainTab('IN')}/></Suspense>}
+                  {mainTab==='PPF'&&<Suspense fallback={<div style={{padding:40,color:T.text3}}>Loading PPF...</div>}><PPFModule T={T} holdings={ppfHoldings} setHoldings={setPpfHoldings} onClose={()=>setMainTab('IN')}/></Suspense>}
+                  {mainTab==='EF'&&<Suspense fallback={<div style={{padding:40,color:T.text3}}>Loading Emergency Fund...</div>}><EFModule T={T} holdings={emergencyFund} setHoldings={setEmergencyFund} onClose={()=>setMainTab('IN')}/></Suspense>}
                 </div>
                 <div className="right-sidebar" style={{overflowY:'auto',padding:rightSidebarCollapsed?0:'20px 16px 20px 0',borderLeft:rightSidebarCollapsed?'none':`1px solid ${T.border}`,opacity:rightSidebarCollapsed?0:1,transition:'opacity 0.2s'}}>
                   <div style={{padding:'0 0 0 16px'}}>
                     {mainTab==='IN'&&<SidebarContent sRows={inRows} pie={inPie} currency="INR" invAmt={invIN} totalAmt={totalPortInr} gain={gainIN} dayGain={dayIN} offset={0}/>}
                     {mainTab==='US'&&<SidebarContent sRows={usRows} pie={usPie} currency="USD" usdInr={usdInr} invAmt={invUS} totalAmt={totalPortUsd} gain={gainUS} dayGain={dayUS} offset={6}/>}
+                    {mainTab==='MF'&&<SidebarContent sRows={mfHoldings.map(h=>({symbol:h.schemeCode,gain:(h.units*(prices[`MF_${h.schemeCode}`]?.current||0))-h.invVal}))} pie={mfHoldings.map(h=>({name:h.name,value:h.units*(prices[`MF_${h.schemeCode}`]?.current||0)}))} currency="INR" invAmt={mfHoldings.reduce((a,h)=>a+h.invVal,0)} totalAmt={mfHoldings.reduce((a,h)=>a+h.units*(prices[`MF_${h.schemeCode}`]?.current||0),0)} gain={mfGain} dayGain={0} offset={2}/>}
+                    {mainTab==='PPF'&&<div style={{padding:16,background:T.surface2,borderRadius:12,border:`1px solid ${T.border}`}}><div style={{fontSize:11,color:T.text3,fontWeight:700,textTransform:'uppercase',marginBottom:8}}>PPF Overview</div><div style={{fontSize:20,fontWeight:800,color:'#f59e0b'}}>₹{ppfHoldings.reduce((a,h)=>a+h.amount,0).toLocaleString('en-IN')}</div><div style={{fontSize:11,color:T.text3,marginTop:4}}>{ppfHoldings.length} Contributions</div></div>}
+                    {mainTab==='EF'&&<div style={{padding:16,background:T.surface2,borderRadius:12,border:`1px solid ${T.border}`}}><div style={{fontSize:11,color:T.text3,fontWeight:700,textTransform:'uppercase',marginBottom:8}}>EF Overview</div><div style={{fontSize:20,fontWeight:800,color:'#ef4444'}}>₹{emergencyFund.reduce((a,h)=>a+h.amount,0).toLocaleString('en-IN')}</div><div style={{fontSize:11,color:T.text3,marginTop:4}}>{emergencyFund.length} Sources</div></div>}
                   </div>
                 </div>
               </div>

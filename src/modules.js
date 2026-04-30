@@ -546,257 +546,9 @@ export function SectorModule({T,rows,prices,usdInr,onClose}) {
 // ── MODULE: BENCHMARK COMPARISON ─────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export function BenchmarkModule({T,rows,inRows,usRows,usdInr,history,onClose}) {
-  const [benchData,setBenchData]=useState({});
-  const [loading,setLoading]=useState(false);
-  const [range,setRange]=useState('5d');
-  const [hover,setHover]=useState(null);
-  const svgRef=useRef();
-
-  const RANGES=[{v:'5d',l:'5D'},{v:'1mo',l:'1M'},{v:'3mo',l:'3M'},{v:'6mo',l:'6M'},{v:'1y',l:'1Y'}];
-  const BENCHES=[
-    {sym:'^NSEI',label:'Nifty 50',color:'#f59e0b'},
-    {sym:'^GSPC',label:'S&P 500',color:'#00b4d8'},
-  ];
-
-  // Compute portfolio returns for each market
-  const inReturn=useMemo(()=>{
-    if(!inRows?.length)return null;
-    const inv=inRows.reduce((s,r)=>s+r.invested,0);
-    const cur=inRows.reduce((s,r)=>s+(r.curValue??r.invested),0);
-    return inv?((cur-inv)/inv)*100:null;
-  },[inRows]);
-  const usReturn=useMemo(()=>{
-    if(!usRows?.length)return null;
-    const inv=usRows.reduce((s,r)=>s+r.invested,0);
-    const cur=usRows.reduce((s,r)=>s+(r.curValue??r.invested),0);
-    return inv?((cur-inv)/inv)*100:null;
-  },[usRows]);
-
-  const fetchBench=useCallback(async()=>{
-    setLoading(true);
-    const out={};
-    await Promise.all(BENCHES.map(async b=>{
-      try{
-        const r=await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(b.sym)}?interval=1d&range=${range}`,{headers:{Accept:'application/json'}});
-        if(r.ok){const j=await r.json();const res=j?.chart?.result?.[0];const ts=res?.timestamp||[];const q=res?.indicators?.quote?.[0]||{};const closes=ts.map((t,i)=>({date:t*1000,close:q.close?.[i]})).filter(d=>d.close!=null);out[b.sym]=closes;}
-      }catch{}
-    }));
-    setBenchData(out);setLoading(false);
-  },[range]);
-
-  useEffect(()=>{fetchBench();},[fetchBench]);
-
-  // Combined portfolio return (all holdings, USD converted to INR)
-  const portfolioReturn=useMemo(()=>{
-    if(!rows.length)return null;
-    const toINR=(v,cur)=>cur==='USD'&&usdInr?v*usdInr:v;
-    const totalInvested=rows.reduce((s,r)=>s+toINR(r.invested,r.currency||'INR'),0);
-    const totalCurrent=rows.reduce((s,r)=>s+toINR(r.curValue??r.invested,r.currency||'INR'),0);
-    if(!totalInvested)return null;
-    return((totalCurrent-totalInvested)/totalInvested)*100;
-  },[rows,usdInr]);
+// [BenchmarkModule Removed]
 
 
-  // Normalize benchmark series to % return from start
-  const normalized=useMemo(()=>{
-    const out={};
-    const toS=ts=>new Date(ts).toISOString().slice(0,10);
-    BENCHES.forEach(b=>{
-      const s=benchData[b.sym];if(!s||!s.length)return;
-      const base=s[0].close;
-      out[b.sym]=s.map(d=>({date:toS(d.date),pct:(d.close/base-1)*100}));
-    });
-    // Normalize portfolio series (Absolute Total Return from snapshots)
-    const firstBench=Object.values(out)[0];
-    if(firstBench?.length>0 && history.length>0){
-      const start=firstBench[0].date, end=firstBench[firstBench.length-1].date;
-      const hRange=history.filter(h=>h.date>=start && h.date<=end);
-      if(hRange.length>0){
-        out['PORT_IN']=hRange.map(h=>({date:h.date,pct:h.inrInv?((h.inrVal/h.inrInv)-1)*100:0}));
-        out['PORT_US']=hRange.map(h=>({date:h.date,pct:h.usdInv?((h.usdVal/h.usdInv)-1)*100:0}));
-      }
-    }
-    return out;
-  },[benchData, history]);
-
-  // SVG chart — include portfolio returns in the Y-axis range
-  const allSeries=Object.values(normalized);
-  const allPcts=allSeries.flatMap(s=>s.map(d=>d.pct)).filter(v=>v!=null&&!isNaN(v));
-  const minP=allPcts.length?Math.min(...allPcts,-5):-5,maxP=allPcts.length?Math.max(...allPcts,5):5;
-  const range_=maxP-minP||10;
-  const dates=allSeries[0]?.map(d=>d.date)||[];
-  const VW=700,VH=200,PAD={t:16,r:16,b:32,l:52};
-  const W=VW-PAD.l-PAD.r,H=VH-PAD.t-PAD.b;
-  const xOf=i=>PAD.l+(dates.length>1?(i/(dates.length-1))*W:W);
-  const yOf=p=>PAD.t+H-((p-minP)/range_)*H;
-  const yZero=yOf(0);
-
-  return(
-    <div style={{flex:1,overflowY:'auto',minHeight:0}}>
-      <div style={{padding:24,display:'flex',flexDirection:'column',gap:16}}>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:12}}>
-        <div>
-          <div style={{fontSize:20,fontWeight:700,color:T.text,marginBottom:4}}>Benchmark Comparison</div>
-          <div style={{fontSize:13,color:T.text3}}>Portfolio Manager Pro (v4.7.4)</div>
-        </div>
-        <div style={{display:'flex',gap:10,alignItems:'center'}}>
-          <div style={{display:'flex',gap:8,alignItems:'center'}}>
-            {RANGES.map(r=>(
-              <button key={r.v} onClick={()=>setRange(r.v)} style={{padding:'6px 14px',borderRadius:6,border:`1px solid ${range===r.v?T.accent:T.border2}`,background:range===r.v?T.accentBg:'transparent',color:range===r.v?T.accent:T.text2,cursor:'pointer',fontSize:12,fontWeight:range===r.v?700:400,transition:'all .12s'}}>{r.l}</button>
-            ))}
-            <NvBtn onClick={fetchBench} disabled={loading} T={T}><Ic.Refresh s={loading}/></NvBtn>
-          </div>
-          {onClose&&<button onClick={onClose} style={{background:'none',border:`1px solid ${T.border}`,borderRadius:6,cursor:'pointer',color:T.text3,padding:'7px 8px',display:'flex',transition:'all .1s'}} onMouseEnter={e=>{e.currentTarget.style.borderColor=T.accent;e.currentTarget.style.color=T.accent;}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.text3;}}><Ic.X/></button>}
-        </div>
-      </div>
-
-      {/* Chart */}
-      <div style={{background:T.surface2,borderRadius:8,border:`1px solid ${T.border}`,padding:'16px 12px'}}>
-        {loading?<div style={{height:200,display:'flex',alignItems:'center',justifyContent:'center',color:T.text3}}>Loading benchmark data…</div>:
-        !allSeries.length?<div style={{height:200,display:'flex',alignItems:'center',justifyContent:'center',color:T.text3}}>No data available</div>:(
-          <svg ref={svgRef} viewBox={`0 0 ${VW} ${VH}`} preserveAspectRatio="xMidYMid meet" style={{width:'100%',height:'auto',display:'block'}} onMouseMove={e=>{if(!svgRef.current)return;const rect=svgRef.current.getBoundingClientRect();const sx=((e.clientX-rect.left)/rect.width)*VW;const i=Math.max(0,Math.min(dates.length-1,Math.round(((sx-PAD.l)/W)*(dates.length-1))));setHover(i);}} onMouseLeave={()=>setHover(null)}>
-            {/* Zero line */}
-            <line x1={PAD.l} y1={yZero} x2={PAD.l+W} y2={yZero} stroke={T.border} strokeWidth="1"/>
-            <text x={PAD.l-4} y={yZero+4} fontSize={8} fill={T.text3} fontFamily="inherit" textAnchor="end">0%</text>
-            {/* Grid */}
-            {[-10,-5,5,10,15,20].map(p=>(p>minP&&p<maxP)&&(
-              <g key={p}><line x1={PAD.l} y1={yOf(p)} x2={PAD.l+W} y2={yOf(p)} stroke={T.border} strokeWidth="0.5" strokeDasharray="3 3"/><text x={PAD.l-4} y={yOf(p)+4} fontSize={8} fill={T.text3} fontFamily="inherit" textAnchor="end">{p}%</text></g>
-            ))}
-            {/* Benchmark lines */}
-            {BENCHES.map(b=>{
-              const s=normalized[b.sym];if(!s)return null;
-              const path=s.map((d,i)=>`${i===0?'M':'L'}${xOf(i).toFixed(1)},${yOf(d.pct).toFixed(1)}`).join(' ');
-              return<path key={b.sym} d={path} fill="none" stroke={b.color} strokeWidth="2"/>;
-            })}
-            {normalized['PORT_IN']?.length>0&&(
-              <>
-                {normalized['PORT_IN'].length>1 ? (
-                  <path d={normalized['PORT_IN'].map((d,i)=>{
-                    const idx=dates.indexOf(d.date);
-                    return `${i===0?'M':'L'}${xOf(idx!==-1?idx:i).toFixed(1)},${yOf(d.pct).toFixed(1)}`;
-                  }).join(' ')} fill="none" stroke="#ff9800" strokeWidth="2" strokeDasharray="5 3"/>
-                ) : null}
-                {normalized['PORT_IN'].map(d=>{
-                  const idx=dates.indexOf(d.date);
-                  return <circle key={d.date} cx={xOf(idx!==-1?idx:0)} cy={yOf(d.pct)} r="3" fill="#ff9800" />;
-                })}
-              </>
-            )}
-            {normalized['PORT_US']?.length>0&&(
-              <>
-                {normalized['PORT_US'].length>1 ? (
-                  <path d={normalized['PORT_US'].map((d,i)=>{
-                    const idx=dates.indexOf(d.date);
-                    return `${i===0?'M':'L'}${xOf(idx!==-1?idx:i).toFixed(1)},${yOf(d.pct).toFixed(1)}`;
-                  }).join(' ')} fill="none" stroke="#00b4d8" strokeWidth="2" strokeDasharray="5 3"/>
-                ) : null}
-                {normalized['PORT_US'].map(d=>{
-                  const idx=dates.indexOf(d.date);
-                  return <circle key={d.date} cx={xOf(idx!==-1?idx:0)} cy={yOf(d.pct)} r="3" fill="#00b4d8" />;
-                })}
-              </>
-            )}
-            {/* X axis dates */}
-            {dates.filter((_,i)=>i%Math.max(1,Math.floor(dates.length/6))===0).map((d,i)=>{
-              const idx=dates.indexOf(d);
-              return<text key={i} x={xOf(idx)} y={PAD.t+H+14} fontSize={8} fill={T.text3} fontFamily="inherit" textAnchor="middle">{new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short'})}</text>;
-            })}
-            {/* Hover */}
-            {hover!==null&&dates[hover]&&(
-              <g>
-                <line x1={xOf(hover)} y1={PAD.t} x2={xOf(hover)} y2={PAD.t+H} stroke={T.border2} strokeWidth="0.8"/>
-                <rect x={Math.min(xOf(hover)+8,VW-130)} y={PAD.t+4} width={135} height={(BENCHES.length+(inReturn!=null?1:0)+(usReturn!=null?1:0))*18+20} rx={4} fill={T.surface2} stroke={T.border2} strokeWidth="0.8"/>
-                <text x={Math.min(xOf(hover)+14,VW-124)} y={PAD.t+16} fontSize={8} fill={T.text3} fontFamily="inherit">{new Date(dates[hover]).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}</text>
-                {BENCHES.map((b,i)=>{const s=normalized[b.sym];const pt=s?.[hover];return pt?<text key={b.sym} x={Math.min(xOf(hover)+14,VW-124)} y={PAD.t+30+i*18} fontSize={10} fill={b.color} fontFamily="inherit" fontWeight="700">{b.label}: {pt.pct>=0?'+':''}{pt.pct.toFixed(2)}%</text>:null;})}
-                {normalized['PORT_IN'] && (()=>{
-                  const pt=normalized['PORT_IN'].find(x=>x.date===dates[hover]);
-                  return pt?<text x={Math.min(xOf(hover)+14,VW-124)} y={PAD.t+30+BENCHES.length*18} fontSize={10} fill="#ff9800" fontFamily="inherit" fontWeight="700">🇮🇳 Portfolio: {pt.pct>=0?'+':''}{pt.pct.toFixed(2)}%</text>:null;
-                })()}
-                {normalized['PORT_US'] && (()=>{
-                  const pt=normalized['PORT_US'].find(x=>x.date===dates[hover]);
-                  return pt?<text x={Math.min(xOf(hover)+14,VW-124)} y={PAD.t+30+(BENCHES.length+1)*18} fontSize={10} fill="#00b4d8" fontFamily="inherit" fontWeight="700">🇺🇸 Portfolio: {pt.pct>=0?'+':''}{pt.pct.toFixed(2)}%</text>:null;
-                })()}
-              </g>
-            )}
-          </svg>
-        )}
-        {/* Legend */}
-        <div style={{display:'flex',gap:20,justifyContent:'center',marginTop:8}}>
-          {BENCHES.map(b=>{const s=normalized[b.sym];const last=s?.[s.length-1]?.pct;return(
-            <div key={b.sym} style={{display:'flex',alignItems:'center',gap:6}}>
-              <div style={{width:20,height:2,background:b.color,borderRadius:1}}/>
-              <span style={{fontSize:12,color:T.text2}}>{b.label}</span>
-              {last!=null&&<span style={{fontSize:12,fontWeight:700,color:last>=0?T.success:T.danger}}>{last>=0?'+':''}{last.toFixed(2)}%</span>}
-            </div>
-          );})}
-          {normalized['PORT_IN']?.length>0&&(
-            <div style={{display:'flex',alignItems:'center',gap:6}}>
-              <div style={{width:20,height:2,background:'#ff9800',borderRadius:1,border:'1px dashed #ff9800'}}/>
-              <span style={{fontSize:12,color:T.text2}}>🇮🇳 Portfolio</span>
-              {(()=>{const s=normalized['PORT_IN'];const last=s[s.length-1]?.pct;return last!=null&&<span style={{fontSize:12,fontWeight:700,color:last>=0?T.success:T.danger}}>{last>=0?'+':''}{last.toFixed(2)}%</span>;})()}
-            </div>
-          )}
-          {normalized['PORT_US']?.length>0&&(
-            <div style={{display:'flex',alignItems:'center',gap:6}}>
-              <div style={{width:20,height:2,background:'#00b4d8',borderRadius:1,border:'1px dashed #00b4d8'}}/>
-              <span style={{fontSize:12,color:T.text2}}>🇺🇸 Portfolio</span>
-              {(()=>{const s=normalized['PORT_US'];const last=s[s.length-1]?.pct;return last!=null&&<span style={{fontSize:12,fontWeight:700,color:last>=0?T.success:T.danger}}>{last>=0?'+':''}{last.toFixed(2)}%</span>;})()}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Performance table */}
-      {allSeries.length>0&&(
-        <div style={{background:T.surface2,borderRadius:8,border:`1px solid ${T.border}`,overflow:'hidden'}}>
-          <div style={{padding:'12px 16px',borderBottom:`1px solid ${T.border}`}}>
-            <span style={{fontSize:13,fontWeight:700,color:T.text}}>Performance Summary</span>
-          </div>
-          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
-            <thead><tr style={{background:T.surface3}}>{['Index','Start','Current','Return','High','Low'].map(h=><th key={h} style={{padding:'10px 14px',textAlign:'left',color:T.text3,fontWeight:700,fontSize:11,borderBottom:`1px solid ${T.border}`}}>{h}</th>)}</tr></thead>
-            <tbody>
-              {inReturn!=null&&(
-                <tr style={{background:'rgba(255,152,0,.08)'}}>
-                  <td style={{padding:'10px 14px',borderBottom:`1px solid ${T.border}`}}><div style={{display:'flex',alignItems:'center',gap:8}}><span style={{fontSize:12}}>🇮🇳</span><span style={{fontWeight:700,color:T.inColor}}>Indian Portfolio</span></div></td>
-                  <td style={{padding:'10px 14px',borderBottom:`1px solid ${T.border}`,color:T.text2}}>₹{inRows.reduce((s,r)=>s+r.invested,0).toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
-                  <td style={{padding:'10px 14px',borderBottom:`1px solid ${T.border}`,color:T.cyan,fontWeight:700}}>₹{inRows.reduce((s,r)=>s+(r.curValue??r.invested),0).toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
-                  <td style={{padding:'10px 14px',borderBottom:`1px solid ${T.border}`,fontWeight:700,color:inReturn>=0?T.success:T.danger}}>{inReturn>=0?'+':''}{inReturn.toFixed(2)}%</td>
-                  <td style={{padding:'10px 14px',borderBottom:`1px solid ${T.border}`,color:T.text3}}>vs Nifty 50</td>
-                  <td style={{padding:'10px 14px',borderBottom:`1px solid ${T.border}`,color:T.text3}}>{(()=>{const s=normalized['^NSEI'];return s?`${s[s.length-1]?.pct>=0?'+':''}${s[s.length-1]?.pct?.toFixed(2)}%`:'—';})()}</td>
-                </tr>
-              )}
-              {usReturn!=null&&(
-                <tr style={{background:'rgba(0,180,216,.08)'}}>
-                  <td style={{padding:'10px 14px',borderBottom:`1px solid ${T.border}`}}><div style={{display:'flex',alignItems:'center',gap:8}}><span style={{fontSize:12}}>🇺🇸</span><span style={{fontWeight:700,color:T.usColor}}>US Portfolio</span></div></td>
-                  <td style={{padding:'10px 14px',borderBottom:`1px solid ${T.border}`,color:T.text2}}>${usRows.reduce((s,r)=>s+r.invested,0).toLocaleString('en-US',{maximumFractionDigits:0})}</td>
-                  <td style={{padding:'10px 14px',borderBottom:`1px solid ${T.border}`,color:T.cyan,fontWeight:700}}>${usRows.reduce((s,r)=>s+(r.curValue??r.invested),0).toLocaleString('en-US',{maximumFractionDigits:0})}</td>
-                  <td style={{padding:'10px 14px',borderBottom:`1px solid ${T.border}`,fontWeight:700,color:usReturn>=0?T.success:T.danger}}>{usReturn>=0?'+':''}{usReturn.toFixed(2)}%</td>
-                  <td style={{padding:'10px 14px',borderBottom:`1px solid ${T.border}`,color:T.text3}}>vs S&P 500</td>
-                  <td style={{padding:'10px 14px',borderBottom:`1px solid ${T.border}`,color:T.text3}}>{(()=>{const s=normalized['^GSPC'];return s?`${s[s.length-1]?.pct>=0?'+':''}${s[s.length-1]?.pct?.toFixed(2)}%`:'—';})()}</td>
-                </tr>
-              )}
-              {BENCHES.map((b,i)=>{
-              const s=normalized[b.sym];const raw=benchData[b.sym];if(!s||!raw)return null;
-              const ret=s[s.length-1]?.pct??0;const hi=Math.max(...s.map(d=>d.pct));const lo=Math.min(...s.map(d=>d.pct));
-              return(
-                <tr key={b.sym} style={{background:i%2===0?T.surface2:T.surface3}}>
-                  <td style={{padding:'10px 14px',borderBottom:`1px solid ${T.border}`}}><div style={{display:'flex',alignItems:'center',gap:8}}><div style={{width:8,height:8,borderRadius:2,background:b.color}}/><span style={{fontWeight:700,color:T.text}}>{b.label}</span></div></td>
-                  <td style={{padding:'10px 14px',borderBottom:`1px solid ${T.border}`,color:T.text2}}>{raw[0]?.close?.toFixed(2)}</td>
-                  <td style={{padding:'10px 14px',borderBottom:`1px solid ${T.border}`,color:T.cyan,fontWeight:700}}>{raw[raw.length-1]?.close?.toFixed(2)}</td>
-                  <td style={{padding:'10px 14px',borderBottom:`1px solid ${T.border}`,fontWeight:700,color:ret>=0?T.success:T.danger}}>{ret>=0?'+':''}{ret.toFixed(2)}%</td>
-                  <td style={{padding:'10px 14px',borderBottom:`1px solid ${T.border}`,color:T.success}}>+{hi.toFixed(2)}%</td>
-                  <td style={{padding:'10px 14px',borderBottom:`1px solid ${T.border}`,color:T.danger}}>{lo.toFixed(2)}%</td>
-                </tr>
-              );
-            })}</tbody>
-          </table>
-        </div>
-      )}
-      </div>
-    </div>
-  );
-}
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1174,15 +926,24 @@ export function HistoryModule({T,history,setHistory,onClose}) {
 
   const latest = data[data.length-1];
   
-  // Calculate gains as sum of individual asset gains (Labeled 1 in user screenshot)
   const inGain = (latest.inrEquityVal||0) - (latest.inrEquityInv||0);
   const usGain = Math.round((latest.usdEquityVal||0)*(latest.usdInr||83.5)) - Math.round((latest.usdEquityInv||0)*(latest.usdInr||83.5));
   const npsGain = (latest.npsVal||0) - (latest.npsInv||0);
   const goldGain = (latest.goldVal||0) - (latest.goldInv||0);
-  const gain = inGain + usGain + npsGain + goldGain;
+  const mfGain = (latest.mfVal||0) - (latest.mfInv||0);
+  const ppfGain = (latest.ppfVal||0) - (latest.ppfInv||0);
+  const indiaEquityVal = latest.inrEquityVal || 0;
+  const usEquityValInInr = Math.round((latest.usdEquityVal||0)*(latest.usdInr||83.5));
+  const mfVal = latest.mfVal || 0;
+  const npsVal = latest.npsVal || 0;
+  const ppfVal = latest.ppfVal || 0;
+  const goldVal = latest.goldVal || 0;
+  const totalValueSum = indiaEquityVal + usEquityValInInr + mfVal + npsVal + ppfVal + goldVal;
+
+  const gain = inGain + usGain + npsGain + goldGain + mfGain + ppfGain;
 
   // Calculate actual total investment (sum of individual asset investments)
-  const actualInv = (latest.inrEquityInv||0) + Math.round((latest.usdEquityInv||0)*(latest.usdInr||83.5)) + (latest.npsInv||0) + (latest.goldInv||0);
+  const actualInv = (latest.inrEquityInv||0) + Math.round((latest.usdEquityInv||0)*(latest.usdInr||83.5)) + (latest.npsInv||0) + (latest.goldInv||0) + (latest.mfInv||0) + (latest.ppfInv||0);
   const gainPct = actualInv > 0 ? (gain / actualInv) * 100 : 0;
   const isUp = gain >= 0;
   const lc = isUp ? T.success : T.danger;
@@ -1194,12 +955,14 @@ export function HistoryModule({T,history,setHistory,onClose}) {
           <h2 style={{fontSize:22,fontWeight:800,color:T.text,letterSpacing:'-0.02em',marginBottom:4}}>Asset Performance Dashboard</h2>
           <div style={{fontSize:13,color:T.text3}}>{data.length} historical snapshots recorded</div>
         </div>
-        <div style={{display:'flex',gap:24}}>
-          <div style={{textAlign:'right'}}><div style={{fontSize:11,color:T.text3}}>Stocks Value</div><div style={{fontSize:18,fontWeight:700,color:T.text}}>₹{latest.portfolioVal?.toLocaleString('en-IN') || (latest.inrEquityVal + Math.round((latest.usdEquityVal||0)*(latest.usdInr||83.5))).toLocaleString('en-IN')}</div></div>
-          <div style={{textAlign:'right'}}><div style={{fontSize:11,color:T.text3}}>NPS Value</div><div style={{fontSize:18,fontWeight:700,color:T.success}}>₹{latest.npsVal?.toLocaleString('en-IN')}</div></div>
-          <div style={{textAlign:'right'}}><div style={{fontSize:11,color:T.text3}}>Gold Value</div><div style={{fontSize:18,fontWeight:700,color:'#FFD700'}}>₹{latest.goldVal?.toLocaleString('en-IN')}</div></div>
-          <div style={{textAlign:'right'}}><div style={{fontSize:11,color:T.text3}}>Total Value</div><div style={{fontSize:18,fontWeight:700,color:T.accent}}>₹{latest.inrVal.toLocaleString('en-IN')}</div></div>
-          <div style={{textAlign:'right'}}><div style={{fontSize:11,color:T.text3}}>Total P&L</div><div style={{fontSize:18,fontWeight:700,color:lc}}>{gain>=0?'+':'−'}₹{Math.abs(gain).toLocaleString('en-IN',{maximumFractionDigits:0})} ({gainPct>=0?'+':''}{gainPct.toFixed(2)}%)</div></div>
+        <div style={{display:'flex',gap:20,flexWrap:'wrap',justifyContent:'flex-end'}}>
+          <div style={{textAlign:'right'}}><div style={{fontSize:10,color:T.text3,textTransform:'uppercase',fontWeight:600}}>Stocks</div><div style={{fontSize:16,fontWeight:700,color:T.text}}>₹{(indiaEquityVal + usEquityValInInr).toLocaleString('en-IN')}</div></div>
+          <div style={{textAlign:'right'}}><div style={{fontSize:10,color:T.text3,textTransform:'uppercase',fontWeight:600}}>MF</div><div style={{fontSize:16,fontWeight:700,color:'#10b981'}}>₹{mfVal.toLocaleString('en-IN')}</div></div>
+          <div style={{textAlign:'right'}}><div style={{fontSize:10,color:T.text3,textTransform:'uppercase',fontWeight:600}}>NPS</div><div style={{fontSize:16,fontWeight:700,color:T.success}}>₹{npsVal.toLocaleString('en-IN')}</div></div>
+          <div style={{textAlign:'right'}}><div style={{fontSize:10,color:T.text3,textTransform:'uppercase',fontWeight:600}}>PPF</div><div style={{fontSize:16,fontWeight:700,color:'#f59e0b'}}>₹{ppfVal.toLocaleString('en-IN')}</div></div>
+          <div style={{textAlign:'right'}}><div style={{fontSize:10,color:T.text3,textTransform:'uppercase',fontWeight:600}}>Gold</div><div style={{fontSize:16,fontWeight:700,color:'#FFD700'}}>₹{goldVal.toLocaleString('en-IN')}</div></div>
+          <div style={{textAlign:'right',paddingLeft:12,borderLeft:`1px solid ${T.border}`}}><div style={{fontSize:10,color:T.text3,textTransform:'uppercase',fontWeight:600}}>Total Value</div><div style={{fontSize:16,fontWeight:700,color:T.accent}}>₹{totalValueSum.toLocaleString('en-IN')}</div></div>
+          <div style={{textAlign:'right'}}><div style={{fontSize:10,color:T.text3,textTransform:'uppercase',fontWeight:600}}>Total P&L</div><div style={{fontSize:16,fontWeight:700,color:lc}}>{gain>=0?'+':'−'}₹{Math.abs(gain).toLocaleString('en-IN',{maximumFractionDigits:0})} ({gainPct>=0?'+':''}{gainPct.toFixed(2)}%)</div></div>
         </div>
         <button onClick={onClose} style={{marginLeft:20,background:T.surface2,border:`1px solid ${T.border}`,color:T.text3,padding:8,borderRadius:8,cursor:'pointer'}}><Ic.X size={18}/></button>
       </div>
@@ -1224,13 +987,15 @@ export function HistoryModule({T,history,setHistory,onClose}) {
                 {[
                   { label: 'Indian Equity', cur: latest.inrEquityVal, inv: latest.inrEquityInv, symbol: '💹' },
                   { label: 'US Equity',     cur: latest.usdEquityVal > 0 ? Math.round(latest.usdEquityVal * (latest.usdInr || 83.5)) : 0, inv: latest.usdEquityInv > 0 ? Math.round(latest.usdEquityInv * (latest.usdInr || 83.5)) : 0, symbol: '🌐' },
+                  { label: 'Mutual Funds',  cur: latest.mfVal, inv: latest.mfInv, symbol: '📦' },
                   { label: 'NPS Portfolio', cur: latest.npsVal, inv: latest.npsInv, symbol: '🛡️' },
+                  { label: 'PPF Tracker',   cur: latest.ppfVal, inv: latest.ppfInv, symbol: '🏦' },
                   { label: 'Physical Gold', cur: latest.goldVal, inv: latest.goldInv, symbol: '🟡' },
                 ].map((row,idx) => {
                   const rInv = row.inv || 0;
                   const rCur = row.cur || 0;
-                  const gain = rCur - rInv;
-                  const pct = rInv > 0 ? (gain / rInv) * 100 : 0;
+                  const rGain = rCur - rInv;
+                  const pct = rInv > 0 ? (rGain / rInv) * 100 : 0;
                   const hasData = rInv > 0 || rCur > 0;
                   return (
                     <tr key={idx} style={{borderBottom:`1px solid ${T.border}`,transition:'background .1s'}} onMouseEnter={e=>e.currentTarget.style.background=T.surface3} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
@@ -1242,15 +1007,15 @@ export function HistoryModule({T,history,setHistory,onClose}) {
                       </td>
                       <td style={{padding:'16px',textAlign:'right',fontFamily:'monospace',fontSize:14,color:T.text2}}>{hasData ? fmt(rInv, 'INR') : '—'}</td>
                       <td style={{padding:'16px',textAlign:'right',fontFamily:'monospace',fontSize:14,fontWeight:700,color:T.text}}>{hasData ? fmt(rCur, 'INR') : '—'}</td>
-                      <td style={{padding:'16px',textAlign:'right',fontFamily:'monospace',fontSize:14,fontWeight:700,color:gain>=0?T.success:T.danger}}>{hasData ? `${gain>=0?'+':'−'}₹${Math.abs(gain).toLocaleString('en-IN',{maximumFractionDigits:0})}` : '—'}</td>
-                      <td style={{padding:'16px',textAlign:'right',fontFamily:'monospace',fontSize:14,fontWeight:700,color:gain>=0?T.success:T.danger}}>{hasData ? `${pct>=0?'+':''}${pct.toFixed(2)}%` : '—'}</td>
+                      <td style={{padding:'16px',textAlign:'right',fontFamily:'monospace',fontSize:14,fontWeight:700,color:rGain>=0?T.success:T.danger}}>{hasData ? `${rGain>=0?'+':'−'}₹${Math.abs(rGain).toLocaleString('en-IN',{maximumFractionDigits:0})}` : '—'}</td>
+                      <td style={{padding:'16px',textAlign:'right',fontFamily:'monospace',fontSize:14,fontWeight:700,color:rGain>=0?T.success:T.danger}}>{hasData ? `${pct>=0?'+':''}${pct.toFixed(2)}%` : '—'}</td>
                     </tr>
                   );
                 })}
                 <tr style={{background:T.surface3,fontWeight:800}}>
                   <td style={{padding:'16px',fontSize:14,color:T.text}}>Total Portfolio</td>
                   <td style={{padding:'16px',textAlign:'right',fontSize:15,color:T.text2}}>{fmt(actualInv,'INR')}</td>
-                  <td style={{padding:'16px',textAlign:'right',fontSize:15,color:T.accent}}>{fmt(latest.inrVal,'INR')}</td>
+                  <td style={{padding:'16px',textAlign:'right',fontSize:15,color:T.accent}}>{fmt(actualInv + gain,'INR')}</td>
                   <td style={{padding:'16px',textAlign:'right',fontSize:15,color:gain>=0?T.success:T.danger}}>{gain>=0?'+':'−'}₹{Math.abs(gain).toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
                   <td style={{padding:'16px',textAlign:'right',fontSize:15,color:gain>=0?T.success:T.danger}}>{gainPct>=0?'+':''}{gainPct.toFixed(2)}%</td>
                 </tr>
@@ -1259,43 +1024,6 @@ export function HistoryModule({T,history,setHistory,onClose}) {
           </div>
         </div>
 
-        <div style={{background:T.surface2,borderRadius:12,border:`1px solid ${T.border}`,overflow:'hidden',boxShadow:'0 4px 20px rgba(0,0,0,0.1)'}}>
-          <div style={{padding:'16px 20px',borderBottom:`1px solid ${T.border}`,display:'flex',alignItems:'center',gap:8}}>
-            <Ic.LineChart size={16} color={T.text2}/>
-            <span style={{fontSize:14,fontWeight:700,color:T.text}}>Historical Daily Performance Log</span>
-          </div>
-          <div style={{overflowX:'auto',maxHeight:450,overflowY:'auto'}}>
-            <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
-              <thead style={{position:'sticky',top:0,zIndex:2}}>
-                <tr style={{background:T.surface3}}>
-                  {['Date','Initial Value (₹)','Total Value (₹)','Total P&L (₹)','Indian Equity','US Equity','NPS','Gold'].map(h=><th key={h} style={{padding:'12px 16px',textAlign:'right',color:T.text3,fontWeight:700,fontSize:10,textTransform:'uppercase',borderBottom:`1px solid ${T.border}`}}>{h}</th>)}
-                </tr>
-              </thead>
-              <tbody>{[...data].reverse().map((d,i)=>{
-                const prev=data[data.length-2-i];
-                const rInGain = (d.inrEquityVal||0) - (d.inrEquityInv||0);
-                const rUsGain = Math.round((d.usdEquityVal||0)*(d.usdInr||83.5)) - Math.round((d.usdEquityInv||0)*(d.usdInr||83.5));
-                const rNpsGain = (d.npsVal||0) - (d.npsInv||0);
-                const rGoldGain = (d.goldVal||0) - (d.goldInv||0);
-                const inrPnl = rInGain + rUsGain + rNpsGain + rGoldGain;
-                const inInrVal = d.inrEquityVal || (d.portfolioVal - (Math.round((d.usdVal||0)*(d.usdInr||83.5))));
-                const usInrVal = (d.usdEquityVal > 0 ? Math.round(d.usdEquityVal * (d.usdInr || 83.5)) : 0) || Math.round((d.usdVal||0)*(d.usdInr||83.5));
-                return(
-                  <tr key={d.date} style={{background:i%2===0?T.surface2:T.surface3}} onMouseEnter={e=>e.currentTarget.style.background=T.surface4} onMouseLeave={e=>e.currentTarget.style.background=i%2===0?T.surface2:T.surface3}>
-                    <td style={{padding:'12px 16px',textAlign:'left',borderBottom:`1px solid ${T.border}`,color:T.text,fontWeight:600}}>{new Date(d.date).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}</td>
-                    <td style={{padding:'12px 16px',textAlign:'right',borderBottom:`1px solid ${T.border}`,color:T.text3}}>₹{(d.inrInv||8567549).toLocaleString('en-IN')}</td>
-                    <td style={{padding:'12px 16px',textAlign:'right',borderBottom:`1px solid ${T.border}`,fontWeight:700,color:T.cyan}}>₹{d.inrVal.toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
-                    <td style={{padding:'12px 16px',textAlign:'right',borderBottom:`1px solid ${T.border}`}}>{inrPnl!=null?<span style={{fontWeight:700,color:inrPnl>=0?T.success:T.danger}}>{inrPnl>=0?'+':'−'}₹{Math.abs(inrPnl).toLocaleString('en-IN',{maximumFractionDigits:0})}</span>:'—'}</td>
-                    <td style={{padding:'12px 16px',textAlign:'right',borderBottom:`1px solid ${T.border}`,color:T.text2}}>{inInrVal > 0 ? `₹${inInrVal.toLocaleString('en-IN',{maximumFractionDigits:0})}` : '—'}</td>
-                    <td style={{padding:'12px 16px',textAlign:'right',borderBottom:`1px solid ${T.border}`,color:T.text2}}>{usInrVal > 0 ? `₹${usInrVal.toLocaleString('en-IN',{maximumFractionDigits:0})}` : '—'}</td>
-                    <td style={{padding:'12px 16px',textAlign:'right',borderBottom:`1px solid ${T.border}`,color:T.text2}}>{d.npsVal > 0 ? `₹${d.npsVal.toLocaleString('en-IN',{maximumFractionDigits:0})}` : '—'}</td>
-                    <td style={{padding:'12px 16px',textAlign:'right',borderBottom:`1px solid ${T.border}`,color:T.text2}}>{d.goldVal > 0 ? `₹${d.goldVal.toLocaleString('en-IN',{maximumFractionDigits:0})}` : '—'}</td>
-                  </tr>
-                );
-              })}</tbody>
-            </table>
-          </div>
-        </div>
       </div>
     </div>
   );
@@ -2398,3 +2126,327 @@ export function GoldModule({T,holdings,setHoldings,prices,onClose}) {
 }
 
 // ── MAIN APP ──────────────────────────────────────────────────────────────────
+
+export function MFModule({T,holdings,setHoldings,prices,onClose}) {
+  const [showAdd,setShowAdd]=useState(false);
+  const [form,setForm]=useState({name:'',schemeCode:'',units:'',invVal:'',date:new Date().toISOString().split('T')[0]});
+  const [loadingName,setLoadingName]=useState(false);
+
+  useEffect(() => {
+    const code = form.schemeCode.trim();
+    if(code.length >= 5) {
+      const fetchName = async () => {
+        setLoadingName(true);
+        try {
+          const url = `https://api.mfapi.in/mf/${code}`;
+          let j = null;
+          if(window.electronAPI?.netFetch) {
+            const txt = await window.electronAPI.netFetch(url);
+            if(txt) j = JSON.parse(txt);
+          } else {
+            const r = await fetch(url);
+            j = await r.json();
+          }
+          if(j?.meta?.scheme_name) {
+            setForm(p => ({...p, name: j.meta.scheme_name}));
+          }
+        } catch(e) { console.error(e); }
+        finally { setLoadingName(false); }
+      };
+      const t = setTimeout(fetchName, 600);
+      return () => clearTimeout(t);
+    }
+  }, [form.schemeCode]);
+
+  const totalInv = (holdings||[]).reduce((a,h)=>a+(parseFloat(h.invVal)||0),0);
+  const currentVal = (holdings||[]).reduce((a,h)=>{
+    const pr = prices[`MF_${h.schemeCode}`]?.current || 0;
+    return a + (parseFloat(h.units)||0) * pr;
+  },0);
+  const totalGain = currentVal - totalInv;
+  const gainPct = totalInv > 0 ? (totalGain/totalInv)*100 : 0;
+
+  const handleAdd = () => {
+    if(!form.name || !form.schemeCode || !form.units || !form.invVal) return alert("All fields are required");
+    const newH = { ...form, id: Date.now(), units: parseFloat(form.units), invVal: parseFloat(form.invVal) };
+    setHoldings(p => [...(p||[]), newH]);
+    setForm({name:'',schemeCode:'',units:'',invVal:'',date:new Date().toISOString().split('T')[0]});
+    setShowAdd(false);
+  };
+
+  const fmt = (v, c) => v.toLocaleString('en-IN', { style: 'currency', currency: c, maximumFractionDigits: 0 });
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:24,animation:'fadeIn 0.3s ease-out'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <div>
+          <div style={{fontSize:24,fontWeight:800,color:'#10b981',letterSpacing:'-0.02em',marginBottom:4}}>📦 Mutual Funds Portfolio</div>
+          <div style={{fontSize:14,color:T.text3}}>Track direct and regular mutual funds with live NAV updates via MFAPI</div>
+        </div>
+        <div style={{display:'flex',gap:12}}>
+          <button onClick={()=>setShowAdd(!showAdd)} style={{background:'#10b981',color:'#fff',border:'none',padding:'8px 16px',borderRadius:8,fontWeight:700,cursor:'pointer'}}>Add Mutual Fund</button>
+          {onClose&&<button onClick={onClose} style={{background:'none',border:`1px solid ${T.border}`,borderRadius:8,cursor:'pointer',color:T.text3,padding:'8px'}}>X</button>}
+        </div>
+      </div>
+
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:16}}>
+        {[
+          {l:'Initial Invested', v:fmt(totalInv,'INR'), c:T.text},
+          {l:'Current Value', v:fmt(currentVal,'INR'), c:'#10b981'},
+          {l:'Total P&L', v:`${totalGain>=0?'+':'−'}${fmt(Math.abs(totalGain),'INR')} (${gainPct.toFixed(2)}%)`, c:totalGain>=0?T.success:T.danger}
+        ].map((m,i)=>(
+          <div key={i} style={{background:T.surface2,border:`1px solid ${T.border}`,borderRadius:12,padding:'16px 20px'}}>
+            <div style={{fontSize:11,color:T.text3,fontWeight:700,textTransform:'uppercase'}}>{m.l}</div>
+            <div style={{fontSize:22,fontWeight:800,color:m.c}}>{m.v}</div>
+          </div>
+        ))}
+      </div>
+
+      {showAdd && (
+        <div style={{background:T.surface2,border:`1px solid ${T.border}`,borderRadius:12,padding:24,display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:16}}>
+          <div style={{position:'relative'}}>
+            <input placeholder="Fund Name" value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))} style={{width:'100%',background:T.surface3,border:`1px solid ${T.border}`,borderRadius:8,padding:10,color:T.text}}/>
+            {loadingName && <div style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',fontSize:10,color:T.accent}}>Auto-filling...</div>}
+          </div>
+          <input placeholder="Scheme Code (e.g. 120503)" value={form.schemeCode} onChange={e=>setForm(p=>({...p,schemeCode:e.target.value}))} style={{background:T.surface3,border:`1px solid ${T.border}`,borderRadius:8,padding:10,color:T.text}}/>
+          <input placeholder="Units" type="number" value={form.units} onChange={e=>setForm(p=>({...p,units:e.target.value}))} style={{background:T.surface3,border:`1px solid ${T.border}`,borderRadius:8,padding:10,color:T.text}}/>
+          <input placeholder="Total Invested Amount" type="number" value={form.invVal} onChange={e=>setForm(p=>({...p,invVal:e.target.value}))} style={{background:T.surface3,border:`1px solid ${T.border}`,borderRadius:8,padding:10,color:T.text}}/>
+          <button onClick={handleAdd} style={{background:'#10b981',color:'#fff',border:'none',borderRadius:8,fontWeight:700,padding:10}}>Save MF</button>
+        </div>
+      )}
+
+      <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,overflow:'hidden'}}>
+        <table style={{width:'100%',borderCollapse:'collapse'}}>
+          <thead><tr style={{background:T.surface2,borderBottom:`1px solid ${T.border}`}}>
+            {['Fund Name','Units','NAV','Invested','Value','P&L',''].map(h=><th key={h} style={{padding:12,textAlign:'left',fontSize:11,color:T.text3,textTransform:'uppercase'}}>{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {(holdings||[]).map(h=>{
+              const nav = prices[`MF_${h.schemeCode}`]?.current || 0;
+              const val = h.units * nav;
+              const gain = val - h.invVal;
+              const pnlPct = h.invVal > 0 ? (gain/h.invVal)*100 : 0;
+              return (
+                <tr key={h.id} style={{borderBottom:`1px solid ${T.border}`}}>
+                  <td style={{padding:12}}><div style={{fontWeight:600}}>{h.name}</div><div style={{fontSize:10,color:T.text3}}>{h.schemeCode}</div></td>
+                  <td style={{padding:12}}>{h.units}</td>
+                  <td style={{padding:12}}>{nav ? `₹${nav.toFixed(2)}` : '—'}</td>
+                  <td style={{padding:12}}>₹{h.invVal.toLocaleString('en-IN')}</td>
+                  <td style={{padding:12,fontWeight:700}}>₹{val.toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
+                  <td style={{padding:12,color:gain>=0?T.success:T.danger,fontWeight:600}}>{gain>=0?'+':'−'}₹{Math.abs(gain).toLocaleString('en-IN',{maximumFractionDigits:0})} ({pnlPct.toFixed(1)}%)</td>
+                  <td style={{padding:12,textAlign:'right'}}><button onClick={()=>setHoldings(p=>p.filter(x=>x.id!==h.id))} style={{background:'none',border:'none',color:T.text3,cursor:'pointer'}}>X</button></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+export function PPFModule({T,holdings,setHoldings,onClose}) {
+  const [showAdd,setShowAdd]=useState(false);
+  const [form,setForm]=useState({amount:'',date:new Date().toISOString().split('T')[0]});
+  
+  const totalVal = (holdings||[]).reduce((a,h)=>a+(parseFloat(h.amount)||0),0);
+
+  useEffect(() => {
+    if (!holdings || holdings.length === 0) return;
+
+    const getPPFRate = (date) => {
+      const d = new Date(date).toISOString().slice(0, 10);
+      if (d >= '2020-04-01') return 0.071;
+      if (d >= '2019-07-01') return 0.079;
+      if (d >= '2019-04-01') return 0.080;
+      if (d >= '2018-10-01') return 0.080;
+      if (d >= '2018-01-01') return 0.076;
+      if (d >= '2017-07-01') return 0.078;
+      if (d >= '2017-04-01') return 0.079;
+      if (d >= '2016-10-01') return 0.080;
+      if (d >= '2016-04-01') return 0.081;
+      return 0.087; 
+    };
+    
+    const sorted = [...holdings].sort((a,b) => new Date(a.date) - new Date(b.date));
+    const firstYear = new Date(sorted[0].date).getFullYear();
+    const currentYear = new Date().getFullYear();
+    
+    let newEntries = [];
+    let tempHoldings = [...holdings];
+
+    for (let year = firstYear; year <= currentYear; year++) {
+      const fyEndDate = `${year}-03-31`;
+      const fyEnd = new Date(fyEndDate);
+      if (new Date() < fyEnd) break;
+      
+      const interestId = `INT_${year}`;
+      if (holdings.some(h => h.id === interestId)) continue;
+      
+      let fyInterest = 0;
+      for (let m = 0; m < 12; m++) {
+        const monthDate = new Date(year - 1, 3 + m, 1);
+        if (monthDate > new Date() || monthDate > fyEnd) break;
+        
+        const balance = tempHoldings
+          .filter(h => new Date(h.date) < monthDate)
+          .reduce((a,h) => a + (parseFloat(h.amount)||0), 0);
+          
+        fyInterest += balance * (getPPFRate(monthDate) / 12);
+      }
+      
+      if (fyInterest > 1) {
+        const entry = {
+          id: interestId,
+          date: fyEndDate,
+          amount: Math.round(fyInterest),
+          isInterest: true,
+          note: `Annual Interest Accrual FY ${year-1}-${year.toString().slice(-2)}`
+        };
+        newEntries.push(entry);
+        tempHoldings.push(entry);
+      }
+    }
+    
+    if (newEntries.length > 0) {
+      setHoldings(prev => [...prev, ...newEntries]);
+    }
+  }, [holdings, setHoldings]);
+
+  const handleAdd = () => {
+    if(!form.amount || !form.date) return alert("Amount and Date are required");
+    const newH = { ...form, id: Date.now(), amount: parseFloat(form.amount) };
+    setHoldings(p => [...(p||[]), newH]);
+    setForm({amount:'',date:new Date().toISOString().split('T')[0]});
+    setShowAdd(false);
+  };
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:24,animation:'fadeIn 0.3s ease-out'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <div>
+          <div style={{fontSize:24,fontWeight:800,color:'#f59e0b',letterSpacing:'-0.02em',marginBottom:4}}>🏦 PPF Tracker</div>
+          <div style={{fontSize:14,color:T.text3}}>Log contributions and track automated interest with historical rates</div>
+        </div>
+        <div style={{display:'flex',gap:12}}>
+          <button onClick={()=>setShowAdd(!showAdd)} style={{background:'#f59e0b',color:'#fff',border:'none',padding:'8px 16px',borderRadius:8,fontWeight:700,cursor:'pointer'}}>Add Contribution</button>
+          {onClose&&<button onClick={onClose} style={{background:'none',border:`1px solid ${T.border}`,borderRadius:8,cursor:'pointer',color:T.text3,padding:'8px'}}>X</button>}
+        </div>
+      </div>
+
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:16}}>
+        <div style={{background:T.surface2,border:`1px solid ${T.border}`,borderRadius:12,padding:'16px 20px'}}>
+          <div style={{fontSize:11,color:T.text3,fontWeight:700,textTransform:'uppercase'}}>Total PPF Balance</div>
+          <div style={{fontSize:32,fontWeight:800,color:'#f59e0b'}}>₹{totalVal.toLocaleString('en-IN')}</div>
+        </div>
+      </div>
+
+      {showAdd && (
+        <div style={{background:T.surface2,border:`1px solid ${T.border}`,borderRadius:12,padding:24,display:'flex',gap:16,alignItems:'flex-end'}}>
+          <div style={{flex:1}}>
+            <label style={{fontSize:11,color:T.text3,display:'block',marginBottom:4}}>Amount</label>
+            <input type="number" value={form.amount} onChange={e=>setForm(p=>({...p,amount:e.target.value}))} style={{width:'100%',background:T.surface3,border:`1px solid ${T.border}`,borderRadius:8,padding:10,color:T.text}}/>
+          </div>
+          <div style={{flex:1}}>
+            <label style={{fontSize:11,color:T.text3,display:'block',marginBottom:4}}>Date</label>
+            <input type="date" value={form.date} onChange={e=>setForm(p=>({...p,date:e.target.value}))} style={{width:'100%',background:T.surface3,border:`1px solid ${T.border}`,borderRadius:8,padding:10,color:T.text}}/>
+          </div>
+          <button onClick={handleAdd} style={{background:'#f59e0b',color:'#fff',border:'none',padding:'10px 20px',borderRadius:8,fontWeight:700,cursor:'pointer'}}>Add</button>
+        </div>
+      )}
+
+      <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,overflow:'hidden'}}>
+        <table style={{width:'100%',borderCollapse:'collapse'}}>
+          <thead><tr style={{background:T.surface2,borderBottom:`1px solid ${T.border}`}}>
+            {['Date','Description','Amount',''].map(h=><th key={h} style={{padding:12,textAlign:'left',fontSize:11,color:T.text3,textTransform:'uppercase'}}>{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {(holdings||[]).sort((a,b)=>new Date(b.date)-new Date(a.date)).map(h=>(
+              <tr key={h.id} style={{borderBottom:`1px solid ${T.border}`, background: h.isInterest ? T.surface2 : 'transparent'}}>
+                <td style={{padding:14}}>{new Date(h.date).toLocaleDateString('en-GB')}</td>
+                <td style={{padding:14}}>{h.isInterest ? <span style={{color:T.success,fontWeight:700}}>✨ Interest Credit</span> : 'Contribution'}</td>
+                <td style={{padding:14,fontWeight:600,color: h.isInterest ? T.success : T.text}}>₹{h.amount.toLocaleString('en-IN')}</td>
+                <td style={{padding:14,textAlign:'right'}}>
+                  {!h.isInterest && <button onClick={()=>setHoldings(p=>p.filter(x=>x.id!==h.id))} style={{background:'none',border:'none',color:T.text3,cursor:'pointer'}}>X</button>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+export function EFModule({T,holdings,setHoldings,onClose}) {
+  const [showAdd,setShowAdd]=useState(false);
+  const [form,setForm]=useState({bank:'',holder:'',amount:''});
+  
+  const totalVal = (holdings||[]).reduce((a,h)=>a+(parseFloat(h.amount)||0),0);
+
+  const handleAdd = () => {
+    if(!form.bank || !form.amount) return alert("Bank and Amount are required");
+    const newH = { ...form, id: Date.now(), amount: parseFloat(form.amount) };
+    setHoldings(p => [...(p||[]), newH]);
+    setForm({bank:'',holder:'',amount:''});
+    setShowAdd(false);
+  };
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:24,animation:'fadeIn 0.3s ease-out'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <div>
+          <div style={{fontSize:24,fontWeight:800,color:'#ef4444',letterSpacing:'-0.02em',marginBottom:4}}>🆘 Emergency Fund</div>
+          <div style={{fontSize:14,color:T.text3}}>Track your liquid cash and bank balances for rainy days</div>
+        </div>
+        <div style={{display:'flex',gap:12}}>
+          <button onClick={()=>setShowAdd(!showAdd)} style={{background:'#ef4444',color:'#fff',border:'none',padding:'8px 16px',borderRadius:8,fontWeight:700,cursor:'pointer'}}>Add Cash/Bank</button>
+          {onClose&&<button onClick={onClose} style={{background:'none',border:`1px solid ${T.border}`,borderRadius:8,cursor:'pointer',color:T.text3,padding:'8px'}}>X</button>}
+        </div>
+      </div>
+
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:16}}>
+        <div style={{background:T.surface2,border:`1px solid ${T.border}`,borderRadius:12,padding:'16px 20px'}}>
+          <div style={{fontSize:11,color:T.text3,fontWeight:700,textTransform:'uppercase'}}>Total Liquidity</div>
+          <div style={{fontSize:32,fontWeight:800,color:'#ef4444'}}>₹{totalVal.toLocaleString('en-IN')}</div>
+        </div>
+      </div>
+
+      {showAdd && (
+        <div style={{background:T.surface2,border:`1px solid ${T.border}`,borderRadius:12,padding:24,display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:16,alignItems:'flex-end'}}>
+          <div>
+            <label style={{fontSize:11,color:T.text3,display:'block',marginBottom:4}}>Bank / Source Name</label>
+            <input value={form.bank} onChange={e=>setForm(p=>({...p,bank:e.target.value}))} placeholder="e.g. HDFC Savings" style={{width:'100%',background:T.surface3,border:`1px solid ${T.border}`,borderRadius:8,padding:10,color:T.text}}/>
+          </div>
+          <div>
+            <label style={{fontSize:11,color:T.text3,display:'block',marginBottom:4}}>Holder Name</label>
+            <input value={form.holder} onChange={e=>setForm(p=>({...p,holder:e.target.value}))} placeholder="e.g. Self / Spouse" style={{width:'100%',background:T.surface3,border:`1px solid ${T.border}`,borderRadius:8,padding:10,color:T.text}}/>
+          </div>
+          <div>
+            <label style={{fontSize:11,color:T.text3,display:'block',marginBottom:4}}>Amount</label>
+            <input type="number" value={form.amount} onChange={e=>setForm(p=>({...p,amount:e.target.value}))} style={{width:'100%',background:T.surface3,border:`1px solid ${T.border}`,borderRadius:8,padding:10,color:T.text}}/>
+          </div>
+          <button onClick={handleAdd} style={{background:'#ef4444',color:'#fff',border:'none',padding:'10px 20px',borderRadius:8,fontWeight:700,cursor:'pointer',height:42}}>Save</button>
+        </div>
+      )}
+
+      <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,overflow:'hidden'}}>
+        <table style={{width:'100%',borderCollapse:'collapse'}}>
+          <thead><tr style={{background:T.surface2,borderBottom:`1px solid ${T.border}`}}>
+            {['Bank / Account','Holder','Amount',''].map(h=><th key={h} style={{padding:12,textAlign:'left',fontSize:11,color:T.text3,textTransform:'uppercase'}}>{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {(holdings||[]).map(h=>(
+              <tr key={h.id} style={{borderBottom:`1px solid ${T.border}`}}>
+                <td style={{padding:14}}>{h.bank}</td>
+                <td style={{padding:14}}>{h.holder || '—'}</td>
+                <td style={{padding:14,fontWeight:600}}>₹{h.amount.toLocaleString('en-IN')}</td>
+                <td style={{padding:14,textAlign:'right'}}><button onClick={()=>setHoldings(p=>p.filter(x=>x.id!==h.id))} style={{background:'none',border:'none',color:T.text3,cursor:'pointer'}}>X</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
