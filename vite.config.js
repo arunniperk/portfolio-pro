@@ -4,7 +4,6 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
 
-  // Required for Electron: loads assets via file:// not http://
   base: './',
 
   build: {
@@ -22,17 +21,5 @@ export default defineConfig({
     },
 
     chunkSizeWarningLimit: 500,
-  },
-
-  esbuild: {
-    loader: 'jsx',
-    include: /src\/.*\.[jt]sx?$/,
-    exclude: [],
-  },
-
-  optimizeDeps: {
-    esbuildOptions: {
-      loader: { '.js': 'jsx' },
-    },
   },
 });

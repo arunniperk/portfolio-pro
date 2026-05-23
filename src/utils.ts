@@ -1,14 +1,15 @@
-// ── FORMATTING & HELPERS ─────────────────────────────────────────────────────
-export const isUS    = s => !s.endsWith('.NS') && !s.endsWith('.BO');
-export const short   = s => s.replace('.NS','').replace('.BO','');
-export const fmtQty  = v => v==null?'—':parseFloat(v.toFixed(8)).toString();
+import type { Theme } from './types';
 
-export const fmt = (v,cur='INR') => {
+export const isUS    = (s: string): boolean => !s.endsWith('.NS') && !s.endsWith('.BO');
+export const short   = (s: string): string => s.replace('.NS','').replace('.BO','');
+export const fmtQty  = (v: number | null | undefined): string => v==null?'—':parseFloat(v.toFixed(8)).toString();
+
+export const fmt = (v: number | null | undefined, cur = 'INR'): string => {
   if(v==null||isNaN(v))return'—';
   return(cur==='USD'?'$':'₹')+Math.abs(v).toLocaleString(cur==='USD'?'en-US':'en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
 };
 
-export const fmtDual = (v, fx) => {
+export const fmtDual = (v: number | null | undefined, fx: number | null | undefined): string => {
   if(v==null||isNaN(v)||!fx) return fmt(v,'USD');
   const sign=v>=0?'+':'−';
   const abs=Math.abs(v);
@@ -17,7 +18,7 @@ export const fmtDual = (v, fx) => {
   return `${usd}  ≈ ${inr}`;
 };
 
-export const fmtBig = (v,cur='INR') => {
+export const fmtBig = (v: number | null | undefined, cur = 'INR'): string => {
   if(v==null||isNaN(v))return'—';
   const s=cur==='USD'?'$':'₹';
   if(cur==='USD'){
@@ -33,19 +34,26 @@ export const fmtBig = (v,cur='INR') => {
   return fmt(v,cur);
 };
 
-export const fmtPct  = v => v==null||isNaN(v)?'—':`${v>=0?'+':''}${v.toFixed(2)}%`;
-export const gColor  = (v,T) => v==null||isNaN(v)?T.text2:v>=0?T.success:T.danger;
+export const fmtPct  = (v: number | null | undefined): string => v==null||isNaN(v)?'—':`${v>=0?'+':''}${v.toFixed(2)}%`;
+export const gColor  = (v: number | null | undefined, T: Theme): string => v==null||isNaN(v)?T.text2:v>=0?T.success:T.danger;
 
-export const sortRows = (rows,col,dir) => [...rows].sort((a,b)=>{
-  let va=a[col],vb=b[col];
+export const sortRows = <T extends Record<string, unknown>>(rows: T[], col: string, dir: 'asc' | 'desc'): T[] => [...rows].sort((a,b)=>{
+  let va: any=a[col],vb: any=b[col];
   if(va==null&&vb==null)return 0;if(va==null)return dir==='asc'?1:-1;if(vb==null)return dir==='asc'?-1:1;
   if(typeof va==='string')va=va.toLowerCase();if(typeof vb==='string')vb=vb.toLowerCase();
   return dir==='asc'?(va<vb?-1:va>vb?1:0):(va>vb?-1:va<vb?1:0);
 });
 
-// Yahoo Finance search helper (used by useYahooSearch hook)
-export async function yahooSearch(query) {
-  const quotes = [];
+export interface SearchQuote {
+  symbol: string;
+  shortname?: string;
+  longname?: string;
+  quoteType?: string;
+  exchange?: string;
+}
+
+export async function yahooSearch(query: string): Promise<SearchQuote[]> {
+  const quotes: SearchQuote[] = [];
   for (const host of ['query1','query2']) {
     try {
       const res = await fetch(
@@ -54,21 +62,25 @@ export async function yahooSearch(query) {
       );
       if (res.ok) {
         const json = await res.json();
-        const found = (json?.quotes ?? []).filter(r => r.symbol && r.quoteType !== 'OPTION').slice(0, 7);
+        const found = (json?.quotes ?? []).filter((r: SearchQuote) => r.symbol && r.quoteType !== 'OPTION').slice(0, 7);
         if (found.length) return found;
       }
     } catch { /* fallback to next host */ }
   }
   return quotes;
 }
-export const xirr = (cashFlows) => {
+
+export interface CashFlow {
+  date: number;
+  amount: number;
+}
+
+export const xirr = (cashFlows: CashFlow[] | null | undefined): number => {
   if (!cashFlows || cashFlows.length < 2) return 0;
   const maxIterations = 100;
   const precision = 1e-7;
-  // Sort by date to ensure the pivot is the earliest entry
   const sorted = [...cashFlows].sort((a,b)=>a.date-b.date);
   let rate = 0.1;
-  // Try multiple starting points if needed
   const seeds = [0.1, 0.05, 0.15, 0, -0.05];
   for (const seed of seeds) {
     rate = seed;

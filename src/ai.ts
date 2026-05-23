@@ -1,10 +1,9 @@
-// ── AI PROVIDERS ──────────────────────────────────────────────────────────────
 export const GROQ_URL   = 'https://api.groq.com/openai/v1/chat/completions';
 export const GROQ_MODEL = 'llama-3.3-70b-versatile';
-export const GEMINI_URL = key =>
+export const GEMINI_URL = (key: string) =>
   `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
 
-export async function callGroq(apiKey, prompt) {
+export async function callGroq(apiKey: string, prompt: string): Promise<string> {
   if (!apiKey) throw new Error('No Groq key');
   const res = await fetch(GROQ_URL, {
     method: 'POST',
@@ -15,7 +14,7 @@ export async function callGroq(apiKey, prompt) {
   return (await res.json())?.choices?.[0]?.message?.content||'';
 }
 
-export async function callGemini(apiKey, prompt) {
+export async function callGemini(apiKey: string, prompt: string): Promise<string> {
   if (!apiKey) throw new Error('No Gemini key');
   const res = await fetch(GEMINI_URL(apiKey), {
     method: 'POST',
@@ -26,11 +25,11 @@ export async function callGemini(apiKey, prompt) {
   return (await res.json())?.candidates?.[0]?.content?.parts?.[0]?.text||'';
 }
 
-export async function callAI(groqKey, geminiKey, primary, prompt) {
+export async function callAI(groqKey: string, geminiKey: string, primary: string, prompt: string): Promise<{text: string; usedProvider: string}> {
   const order = primary==='groq'
     ? [{key:groqKey,fn:callGroq,name:'Groq'},{key:geminiKey,fn:callGemini,name:'Gemini'}]
     : [{key:geminiKey,fn:callGemini,name:'Gemini'},{key:groqKey,fn:callGroq,name:'Groq'}];
-  let lastErr;
+  let lastErr: unknown;
   for (const {key,fn,name} of order) {
     if (!key) continue;
     try {return {text:await fn(key,prompt),usedProvider:name};} catch(e){lastErr=e;}
@@ -38,7 +37,7 @@ export async function callAI(groqKey, geminiKey, primary, prompt) {
   throw lastErr||new Error('No AI provider configured');
 }
 
-export function extractJSON(text) {
+export function extractJSON(text: string): Record<string, unknown> | null {
   try {
     const m=text.match(/```(?:json)?\s*([\s\S]*?)```/)||text.match(/(\{[\s\S]*\})/);
     return m?JSON.parse(m[1].trim()):JSON.parse(text.trim());
